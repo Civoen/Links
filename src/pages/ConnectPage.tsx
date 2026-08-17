@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import logoUrl from "../assets/logo.png";
 
 type Step = "loading" | "needsClientId" | "readyToConnect";
 
@@ -52,9 +53,7 @@ export default function ConnectPage({ onConnected }: { onConnected: () => void }
     return (
       <div className="screen screen-centered">
         <div className="connect-card">
-          <div className="connect-icon">
-            <LinkIcon />
-          </div>
+          <img className="connect-icon" src={logoUrl} alt="" />
 
           <h1 className="connect-title">Set up your own Spotify app</h1>
           <p className="connect-body">
@@ -101,9 +100,7 @@ export default function ConnectPage({ onConnected }: { onConnected: () => void }
   return (
     <div className="screen screen-centered">
       <div className="connect-card">
-        <div className="connect-icon">
-          <LinkIcon />
-        </div>
+        <img className="connect-icon" src={logoUrl} alt="" />
 
         <h1 className="connect-title">Connect your Spotify account</h1>
         <p className="connect-body">
@@ -126,14 +123,5 @@ export default function ConnectPage({ onConnected }: { onConnected: () => void }
         <p className="connect-footnote">Requires a Spotify Premium account.</p>
       </div>
     </div>
-  );
-}
-
-function LinkIcon() {
-  return (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <path d="M10 13a5 5 0 0 0 7.07 0l2.83-2.83a5 5 0 0 0-7.07-7.07L11.5 4.5" />
-      <path d="M14 11a5 5 0 0 0-7.07 0L4.1 13.83a5 5 0 0 0 7.07 7.07L12.5 19.5" />
-    </svg>
   );
 }

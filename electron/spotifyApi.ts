@@ -4,6 +4,9 @@ export interface TrackSummary {
   uri: string;
   name: string;
   artist: string;
+  album?: string;
+  albumArt?: string; // small (~64px) album art URL, when Spotify provides one
+  durationMs?: number;
 }
 
 export interface PlaybackState {
@@ -25,9 +28,13 @@ async function spotifyFetch(path: string, init: RequestInit = {}): Promise<Respo
     }
   });
 
-  // 202/204 are normal "accepted, no body" responses from several player
-  // endpoints — callers should not assume a JSON body on those.
   return res;
+}
+
+/** Picks the smallest album image Spotify offers — plenty for a list-row thumbnail. */
+function smallestImage(images: any[] | undefined): string | undefined {
+  if (!images || images.length === 0) return undefined;
+  return [...images].sort((a, b) => (a.width ?? 0) - (b.width ?? 0))[0]?.url;
 }
 
 export async function searchTracks(query: string): Promise<TrackSummary[]> {
@@ -41,14 +48,16 @@ export async function searchTracks(query: string): Promise<TrackSummary[]> {
   return json.tracks.items.map((t: any) => ({
     uri: t.uri,
     name: t.name,
-    artist: t.artists.map((a: any) => a.name).join(", ")
+    artist: t.artists.map((a: any) => a.name).join(", "),
+    album: t.album?.name,
+    albumArt: smallestImage(t.album?.images),
+    durationMs: t.duration_ms
   }));
 }
 
 export async function getPlaybackState(): Promise<PlaybackState> {
   const res = await spotifyFetch("/me/player");
 
-  // 204 means "no active device" — treat as simply not playing.
   if (res.status === 204 || !res.ok) {
     return { isPlaying: false, trackUri: null, contextType: null, shuffle: false };
   }
@@ -62,12 +71,6 @@ export async function getPlaybackState(): Promise<PlaybackState> {
   };
 }
 
-/**
- * Adds a track to play next. Per Spotify's own docs, "the order of
- * execution is not guaranteed" relative to other player calls, so the link
- * engine treats this as best-effort and re-checks on the next poll rather
- * than assuming it landed instantly.
- */
 export async function addToQueue(trackUri: string): Promise<void> {
   const params = new URLSearchParams({ uri: trackUri });
   const res = await spotifyFetch(`/me/player/queue?${params.toString()}`, { method: "POST" });
@@ -75,4 +78,20 @@ export async function addToQueue(trackUri: string): Promise<void> {
   if (!res.ok && res.status !== 202 && res.status !== 204) {
     throw new Error(`Add to queue failed: ${res.status}`);
   }
+}
+
+/**
+ * Returns the URIs of upcoming tracks, in order. Spotify's queue endpoint
+ * has documented reliability quirks — it can return stale or inconsistent
+ * results depending on shuffle state — so callers should treat this as a
+ * best-effort signal, not ground truth, and re-check rather than trust a
+ * single read.
+ */
+export async function getQueue(): Promise<string[]> {
+  const res = await spotifyFetch("/me/player/queue");
+  if (!res.ok) return [];
+
+  const json = await res.json();
+  const items = Array.isArray(json.queue) ? json.queue : [];
+  return items.map((t: any) => t.uri).filter(Boolean);
 }

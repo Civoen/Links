@@ -95,6 +95,40 @@ host or run it directly. The split used here:
 Before your first tagged release, replace `YOUR_GITHUB_USERNAME` in
 `site/index.html` with your actual GitHub username or org.
 
+## Icon
+
+`build/icon-source.svg` is the master — the same link glyph used
+throughout the UI, rendered into `icon.icns` (macOS), `icon.ico`
+(Windows), and `icon.png` (Linux). `electron-builder` picks these up
+automatically via the `icon` field in `package.json`'s `build` config.
+Regenerating them after a design change: edit the SVG, then re-render at
+each required size (see git history for the original render script, built
+with `cairosvg` + `Pillow` + `icnsutil`).
+
+## Code signing
+
+Currently unsigned — installers work, but macOS Gatekeeper and Windows
+SmartScreen will warn on first open. The release workflow already reads
+`CSC_LINK` / `CSC_KEY_PASSWORD` (both platforms) and `APPLE_ID` /
+`APPLE_APP_SPECIFIC_PASSWORD` / `APPLE_TEAM_ID` (macOS notarization) as
+environment variables — `electron-builder` picks them up automatically
+when present and silently skips signing when they're not, so nothing
+about today's builds breaks by their absence.
+
+To turn signing on:
+
+1. **Windows**: buy a code signing certificate from a CA (DigiCert,
+   SSL.com, etc). Add its contents as the `CSC_LINK` repo secret (base64
+   or file URL, per electron-builder's docs) and its password as
+   `CSC_KEY_PASSWORD`.
+2. **macOS**: enroll in the Apple Developer Program, generate a
+   "Developer ID Application" certificate for `CSC_LINK`/
+   `CSC_KEY_PASSWORD`, and set `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`,
+   and `APPLE_TEAM_ID` for notarization.
+3. Add all of these under repo **Settings → Secrets and variables →
+   Actions**. The next tagged release picks them up with no workflow
+   changes needed.
+
 ## Known gaps to close before a real release
 
 - **Token storage is plaintext.** Swap `fs.writeFileSync` in
@@ -106,3 +140,8 @@ Before your first tagged release, replace `YOUR_GITHUB_USERNAME` in
   shell, but `electron/spotifyAuth.ts`, `spotifyApi.ts`, `linkStore.ts`,
   and `linkEngine.ts` have no Electron-specific dependencies beyond
   `app.getPath` for file storage — that's the logic to carry over.
+
+Note on versioning: don't hand-edit `"version"` in `package.json` before
+tagging a release — the workflow's "Set version from tag" step derives it
+automatically from whatever tag you push (`v0.1.4` → `0.1.4`), so the two
+can't drift out of sync with each other.

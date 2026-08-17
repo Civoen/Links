@@ -2,7 +2,13 @@ import { useState } from "react";
 import type { TrackSummary } from "../../electron/spotifyApi";
 import TrackSearch from "../components/TrackSearch";
 
-type SearchSlot = "anchor" | "before" | "after" | null;
+function formatDuration(ms?: number): string {
+  if (!ms) return "";
+  const totalSeconds = Math.round(ms / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}:${seconds.toString().padStart(2, "0")}`;
+}
 
 export default function CreateLinkPage({
   onSaved,
@@ -11,28 +17,52 @@ export default function CreateLinkPage({
   onSaved: () => void;
   onCancel: () => void;
 }) {
-  const [before, setBefore] = useState<TrackSummary[]>([]);
-  const [anchor, setAnchor] = useState<TrackSummary | null>(null);
-  const [after, setAfter] = useState<TrackSummary[]>([]);
-  const [activeSlot, setActiveSlot] = useState<SearchSlot>("anchor");
+  const [tracks, setTracks] = useState<TrackSummary[]>([]);
+  const [insertAt, setInsertAt] = useState<number | null>(null);
+  const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  function openSearchAt(index: number) {
+    setError(null);
+    setInsertAt(index);
+  }
+
   function handlePick(track: TrackSummary) {
-    if (activeSlot === "anchor") setAnchor(track);
-    if (activeSlot === "before") setBefore((list) => [...list, track]);
-    if (activeSlot === "after") setAfter((list) => [...list, track]);
-    setActiveSlot(null);
+    if (insertAt === null) return;
+    setTracks((current) => {
+      const next = [...current];
+      next.splice(insertAt, 0, track);
+      return next;
+    });
+    setInsertAt(null);
+  }
+
+  function handleRemove(index: number) {
+    setTracks((current) => current.filter((_, i) => i !== index));
+  }
+
+  function handleDrop(targetIndex: number) {
+    if (draggedIndex === null || draggedIndex === targetIndex) {
+      setDraggedIndex(null);
+      setDragOverIndex(null);
+      return;
+    }
+    setTracks((current) => {
+      const next = [...current];
+      const [moved] = next.splice(draggedIndex, 1);
+      const adjustedTarget = draggedIndex < targetIndex ? targetIndex - 1 : targetIndex;
+      next.splice(adjustedTarget, 0, moved);
+      return next;
+    });
+    setDraggedIndex(null);
+    setDragOverIndex(null);
   }
 
   async function handleSave() {
-    if (!anchor) {
-      setError("Search for a track to anchor this link first.");
-      return;
-    }
-    const tracks = [...before, anchor, ...after];
     if (tracks.length < 2) {
-      setError("Add at least one track before or after the anchor.");
+      setError("Add at least two tracks to create a link.");
       return;
     }
 
@@ -48,36 +78,85 @@ export default function CreateLinkPage({
     }
   }
 
+  if (insertAt !== null) {
+    return (
+      <div className="screen screen-narrow">
+        <h1 className="page-title">Create a link</h1>
+        <TrackSearch onPick={handlePick} onClose={() => setInsertAt(null)} />
+      </div>
+    );
+  }
+
   return (
     <div className="screen screen-narrow">
       <h1 className="page-title">Create a link</h1>
-      <p className="muted">Search for a track, then attach tracks before or after it.</p>
+      <p className="muted">
+        Search for tracks, drag to reorder, and add more anywhere in the chain.
+      </p>
 
-      {activeSlot && (
-        <TrackSearch onPick={handlePick} onClose={() => setActiveSlot(null)} />
-      )}
+      <div className="chain-builder">
+        {tracks.length === 0 ? (
+          <button className="empty-slot-btn" onClick={() => openSearchAt(0)}>
+            <span className="empty-slot-icon">+</span>
+            Search for a track to start the chain
+          </button>
+        ) : (
+          <InsertPoint onClick={() => openSearchAt(0)} />
+        )}
 
-      {!activeSlot && (
-        <div className="chain-builder">
-          {before.map((track) => (
-            <TrackRow key={track.uri} track={track} />
-          ))}
+        {tracks.map((track, index) => (
+          <div key={`${track.uri}-${index}`}>
+            <div
+              className={`chain-track${dragOverIndex === index ? " chain-track-drop-target" : ""}`}
+              draggable
+              onDragStart={() => setDraggedIndex(index)}
+              onDragOver={(e) => {
+                e.preventDefault();
+                setDragOverIndex(index);
+              }}
+              onDragLeave={() => setDragOverIndex((current) => (current === index ? null : current))}
+              onDrop={() => handleDrop(index)}
+              onDragEnd={() => {
+                setDraggedIndex(null);
+                setDragOverIndex(null);
+              }}
+            >
+              <span className="drag-handle" aria-hidden="true">
+                <svg width="10" height="16" viewBox="0 0 10 16" fill="currentColor">
+                  <circle cx="2" cy="2" r="1.5" /><circle cx="8" cy="2" r="1.5" />
+                  <circle cx="2" cy="8" r="1.5" /><circle cx="8" cy="8" r="1.5" />
+                  <circle cx="2" cy="14" r="1.5" /><circle cx="8" cy="14" r="1.5" />
+                </svg>
+              </span>
 
-          <SlotButton label="Add track before" onClick={() => setActiveSlot("before")} />
+              {track.albumArt ? (
+                <img className="track-thumb" src={track.albumArt} alt="" />
+              ) : (
+                <div className="track-thumb" />
+              )}
 
-          {anchor ? (
-            <TrackRow track={anchor} badge="Anchor" />
-          ) : (
-            <SlotButton label="Search for a track" onClick={() => setActiveSlot("anchor")} primary />
-          )}
+              <div className="track-info">
+                <p className="track-name">{track.name}</p>
+                <p className="track-artist">{track.artist}</p>
+              </div>
 
-          <SlotButton label="Add track after" onClick={() => setActiveSlot("after")} />
+              {track.durationMs && (
+                <span className="track-duration">{formatDuration(track.durationMs)}</span>
+              )}
 
-          {after.map((track) => (
-            <TrackRow key={track.uri} track={track} />
-          ))}
-        </div>
-      )}
+              <button
+                className="icon-btn"
+                aria-label={`Remove ${track.name}`}
+                onClick={() => handleRemove(index)}
+              >
+                ✕
+              </button>
+            </div>
+
+            <InsertPoint onClick={() => openSearchAt(index + 1)} />
+          </div>
+        ))}
+      </div>
 
       {error && <p className="error-text">{error}</p>}
 
@@ -93,31 +172,12 @@ export default function CreateLinkPage({
   );
 }
 
-function TrackRow({ track, badge }: { track: TrackSummary; badge?: string }) {
+function InsertPoint({ onClick }: { onClick: () => void }) {
   return (
-    <div className="track-row">
-      <div className="track-thumb" />
-      <div className="track-info">
-        <p className="track-name">{track.name}</p>
-        <p className="track-artist">{track.artist}</p>
-      </div>
-      {badge && <span className="badge">{badge}</span>}
-    </div>
-  );
-}
-
-function SlotButton({
-  label,
-  onClick,
-  primary
-}: {
-  label: string;
-  onClick: () => void;
-  primary?: boolean;
-}) {
-  return (
-    <button className={`slot-btn${primary ? " slot-btn-primary" : ""}`} onClick={onClick}>
-      + {label}
+    <button className="insert-point" onClick={onClick}>
+      <span className="insert-point-line" />
+      <span className="insert-point-plus">+</span>
+      <span className="insert-point-line" />
     </button>
   );
 }

@@ -7,9 +7,13 @@
   --text-secondary: #a7a7a7;
   --text-muted: #6a6a6a;
   --accent: #1db954;
+  --accent-2: #14b866;
+  --accent-gradient: linear-gradient(135deg, #22d97a 0%, #12833f 100%);
   --accent-text: #0b1a10;
   --danger: #e24b4a;
-  --radius: 8px;
+  --radius: 10px;
+  --font-display: "Space Grotesk", -apple-system, "Segoe UI", sans-serif;
+  --font-body: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
 
 * {
@@ -26,7 +30,7 @@ body,
 body {
   background: var(--bg);
   color: var(--text);
-  font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-family: var(--font-body);
   font-size: 14px;
 }
 
@@ -56,31 +60,35 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 20px;
+  margin-bottom: 22px;
 }
 
 .page-title {
-  font-size: 20px;
+  font-family: var(--font-display);
+  font-size: 21px;
   font-weight: 600;
+  letter-spacing: -0.01em;
   margin: 0 0 4px;
 }
 
 .brand {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 9px;
 }
 
 .brand-icon {
-  width: 20px;
-  height: 20px;
-  border-radius: 6px;
-  background: var(--accent);
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  display: block;
 }
 
 .brand-name {
+  font-family: var(--font-display);
   font-weight: 600;
-  font-size: 16px;
+  font-size: 17px;
+  letter-spacing: -0.01em;
 }
 
 .btn {
@@ -89,22 +97,29 @@ body {
   border: 1px solid var(--border);
   border-radius: 20px;
   padding: 8px 18px;
+  font-family: var(--font-display);
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
+  transition: border-color 0.15s ease, transform 0.1s ease;
 }
 
 .btn:hover {
   border-color: var(--text-secondary);
 }
 
+.btn:active {
+  transform: scale(0.97);
+}
+
 .btn:disabled {
   opacity: 0.6;
   cursor: default;
+  transform: none;
 }
 
 .btn-primary {
-  background: var(--accent);
+  background: var(--accent-gradient);
   color: var(--accent-text);
   border-color: transparent;
 }
@@ -127,10 +142,13 @@ body {
   cursor: pointer;
   font-size: 14px;
   padding: 6px;
+  border-radius: 6px;
+  transition: color 0.15s ease, background 0.15s ease;
 }
 
 .icon-btn:hover {
   color: var(--text);
+  background: var(--surface-raised);
 }
 
 /* Connect screen */
@@ -141,20 +159,18 @@ body {
 }
 
 .connect-icon {
-  width: 48px;
-  height: 48px;
-  border-radius: 12px;
-  background: var(--surface);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--accent);
-  margin: 0 auto 20px;
+  width: 56px;
+  height: 56px;
+  border-radius: 14px;
+  display: block;
+  margin: 0 auto 22px;
 }
 
 .connect-title {
-  font-size: 18px;
+  font-family: var(--font-display);
+  font-size: 20px;
   font-weight: 600;
+  letter-spacing: -0.01em;
   margin: 0 0 8px;
 }
 
@@ -209,13 +225,15 @@ body {
 
 .empty-state {
   border: 1px dashed var(--border);
-  border-radius: 12px;
-  padding: 32px 20px;
+  border-radius: 14px;
+  padding: 36px 20px;
   text-align: center;
 }
 
 .empty-title {
+  font-family: var(--font-display);
   font-weight: 600;
+  font-size: 15px;
   margin: 0 0 6px;
 }
 
@@ -227,71 +245,206 @@ body {
 .link-list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
 }
 
 .link-card {
   background: var(--surface);
-  border-radius: 12px;
-  padding: 14px 16px;
+  border-radius: 14px;
+  padding: 16px;
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 14px;
+  transition: background 0.15s ease;
 }
 
-.link-chain {
+.link-card:hover {
+  background: var(--surface-raised);
+}
+
+.link-chain-thumbs {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
-  gap: 6px;
+  flex-shrink: 0;
+}
+
+.link-chain-thumb-wrap {
+  display: flex;
+  align-items: center;
+}
+
+.link-chain-thumb {
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  object-fit: cover;
+  background: var(--surface-raised);
+  border: 2px solid var(--surface);
+  display: block;
+}
+
+.link-chain-thumb-empty {
+  background: var(--surface-raised);
+}
+
+.link-chain-connector {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--surface-raised);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 -2px;
+  flex-shrink: 0;
+  z-index: 1;
+}
+
+.link-card-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.link-track-names {
+  margin: 0 0 4px;
   font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.link-chain-item {
-  display: flex;
+.link-track-name-part {
+  display: inline-flex;
   align-items: center;
-  gap: 6px;
 }
 
-.link-chain-dot {
-  width: 14px;
-  height: 1px;
-  background: var(--accent);
+.link-track-name-glyph {
+  display: inline-flex;
+  align-items: center;
+  margin: 0 6px;
+  opacity: 0.85;
 }
 
 .link-meta {
   color: var(--text-secondary);
   font-size: 12px;
-  margin: 4px 0 0;
+  margin: 0;
 }
 
-/* Create link */
+.link-delete-btn {
+  flex-shrink: 0;
+}
+
+/* Create link — chain builder */
 
 .chain-builder {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin: 16px 0;
+  margin: 18px 0;
 }
 
-.slot-btn {
+.empty-slot-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
   border: 1px dashed var(--border);
   background: transparent;
   color: var(--text-secondary);
   border-radius: var(--radius);
-  padding: 10px;
+  padding: 16px;
   font-size: 13px;
   cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease;
 }
 
-.slot-btn:hover {
-  border-color: var(--text-secondary);
-}
-
-.slot-btn-primary {
-  border-style: solid;
+.empty-slot-btn:hover {
+  border-color: var(--accent);
   color: var(--text);
 }
+
+.empty-slot-icon {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--accent-gradient);
+  color: var(--accent-text);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.insert-point {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 3px 0;
+  opacity: 0.45;
+  transition: opacity 0.15s ease;
+}
+
+.insert-point:hover {
+  opacity: 1;
+}
+
+.insert-point-line {
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+.insert-point-plus {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 1px solid var(--text-secondary);
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.insert-point:hover .insert-point-plus {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.chain-track {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--surface);
+  border-radius: var(--radius);
+  padding: 9px 10px;
+  cursor: grab;
+  border: 1px solid transparent;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.chain-track:active {
+  cursor: grabbing;
+}
+
+.chain-track-drop-target {
+  border-color: var(--accent);
+  background: var(--surface-raised);
+}
+
+.drag-handle {
+  color: var(--text-muted);
+  flex-shrink: 0;
+  display: flex;
+}
+
+/* Shared track row (used in search results and the chain builder) */
 
 .track-row {
   display: flex;
@@ -307,6 +460,7 @@ body {
 .track-row-button {
   border: none;
   cursor: pointer;
+  transition: background 0.15s ease;
 }
 
 .track-row-button:hover {
@@ -314,11 +468,13 @@ body {
 }
 
 .track-thumb {
-  width: 32px;
-  height: 32px;
+  width: 36px;
+  height: 36px;
   border-radius: 6px;
   background: var(--surface-raised);
   flex-shrink: 0;
+  object-fit: cover;
+  display: block;
 }
 
 .track-info {
@@ -338,15 +494,15 @@ body {
   margin: 0;
   font-size: 11px;
   color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.badge {
-  background: rgba(29, 185, 84, 0.16);
-  color: var(--accent);
+.track-duration {
   font-size: 11px;
-  font-weight: 600;
-  padding: 3px 8px;
-  border-radius: 10px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
   flex-shrink: 0;
 }
 
@@ -377,6 +533,13 @@ body {
 .search-input:focus {
   outline: none;
   border-color: var(--accent);
+}
+
+.search-hint {
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.6;
+  margin: 0 0 10px;
 }
 
 .search-results {

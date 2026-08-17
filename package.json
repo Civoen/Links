@@ -1,6 +1,6 @@
 {
   "name": "links-app",
-  "version": "0.1.4",
+  "version": "0.1.0",
   "private": true,
   "description": "Links — a Spotify companion app that keeps chained tracks together during shuffle.",
   "main": "dist-electron/main.js",
@@ -40,14 +40,17 @@
     },
     "mac": {
       "target": "dmg",
-      "category": "public.app-category.music"
+      "category": "public.app-category.music",
+      "icon": "build/icon.icns"
     },
     "win": {
-      "target": "nsis"
+      "target": "nsis",
+      "icon": "build/icon.ico"
     },
     "linux": {
       "target": "AppImage",
-      "category": "Audio"
+      "category": "Audio",
+      "icon": "build/icon.png"
     }
   }
 }
