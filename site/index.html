@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Links — keep tracks together, even on shuffle</title>
+  <style>
+    :root {
+      --bg: #121212;
+      --surface: #181818;
+      --border: #2a2a2a;
+      --text: #ffffff;
+      --text-secondary: #a7a7a7;
+      --accent: #1db954;
+      --accent-text: #0b1a10;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+    main {
+      max-width: 640px;
+      margin: 0 auto;
+      padding: 96px 24px 64px;
+      text-align: center;
+    }
+    .icon {
+      width: 56px;
+      height: 56px;
+      border-radius: 14px;
+      background: var(--surface);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 24px;
+    }
+    h1 {
+      font-size: 32px;
+      font-weight: 600;
+      margin: 0 0 12px;
+    }
+    p.lede {
+      color: var(--text-secondary);
+      font-size: 16px;
+      line-height: 1.6;
+      max-width: 460px;
+      margin: 0 auto 32px;
+    }
+    .downloads {
+      display: flex;
+      gap: 12px;
+      justify-content: center;
+      flex-wrap: wrap;
+      margin-bottom: 12px;
+    }
+    a.btn {
+      display: inline-block;
+      background: var(--accent);
+      color: var(--accent-text);
+      text-decoration: none;
+      font-weight: 600;
+      font-size: 14px;
+      padding: 12px 22px;
+      border-radius: 24px;
+    }
+    a.btn.secondary {
+      background: transparent;
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+    .requires {
+      color: var(--text-secondary);
+      font-size: 12px;
+      margin: 0 0 64px;
+    }
+    .how {
+      text-align: left;
+      border-top: 1px solid var(--border);
+      padding-top: 40px;
+    }
+    .how h2 {
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--text-secondary);
+      margin: 0 0 16px;
+    }
+    .how ol {
+      padding-left: 20px;
+      line-height: 1.9;
+      color: var(--text-secondary);
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="icon">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#1db954" stroke-width="2">
+        <path d="M10 13a5 5 0 0 0 7.07 0l2.83-2.83a5 5 0 0 0-7.07-7.07L11.5 4.5" />
+        <path d="M14 11a5 5 0 0 0-7.07 0L4.1 13.83a5 5 0 0 0 7.07 7.07L12.5 19.5" />
+      </svg>
+    </div>
+
+    <h1>Keep tracks together, even on shuffle</h1>
+    <p class="lede">
+      Links is a Spotify companion app for desktop. Chain tracks like Part 1
+      and Part 2 together, and they'll always play in order — without
+      turning off shuffle for everything else.
+    </p>
+
+    <!-- Replace YOUR_GITHUB_USERNAME/links-app with your actual repo path.
+         /releases/latest always redirects to the newest tagged release,
+         so this link never needs updating as you ship new versions. -->
+    <div class="downloads">
+      <a class="btn" href="https://github.com/YOUR_GITHUB_USERNAME/links-app/releases/latest">
+        Download for Windows
+      </a>
+      <a class="btn secondary" href="https://github.com/YOUR_GITHUB_USERNAME/links-app/releases/latest">
+        Download for Mac
+      </a>
+    </div>
+    <p class="requires">Requires a Spotify Premium account.</p>
+
+    <div class="how">
+      <h2>How it works</h2>
+      <ol>
+        <li>Install Links and connect your Spotify account.</li>
+        <li>Search for a track and link it to the ones that should follow it.</li>
+        <li>Keep listening on shuffle — Links watches for a linked track and queues its partner the moment it starts playing.</li>
+      </ol>
+    </div>
+  </main>
+</body>
+</html>
