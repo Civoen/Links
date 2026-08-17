@@ -23,6 +23,10 @@ jobs:
         with:
           node-version: 20
 
+      - name: Install libfuse (needed to build an AppImage on Linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: sudo apt-get update && sudo apt-get install -y libfuse2t64
+
       - run: npm install
 
       - run: npm run release
