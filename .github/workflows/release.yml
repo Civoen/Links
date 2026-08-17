@@ -26,11 +26,6 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     env:
-      # Without real CSC_LINK/CSC_KEY_PASSWORD secrets set, electron-builder
-      # otherwise tries to auto-discover a signing identity on macOS and
-      # fails outright rather than just building unsigned. This keeps
-      # unsigned builds working; once real signing secrets are added later,
-      # this setting doesn't interfere with them being used.
       CSC_IDENTITY_AUTO_DISCOVERY: false
 
     steps:
@@ -58,11 +53,16 @@ jobs:
         run: npm run release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          CSC_LINK: ${{ secrets.CSC_LINK }}
-          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
-          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          # CSC_LINK / CSC_KEY_PASSWORD / APPLE_* are deliberately left out
+          # for now. Even referencing an unset secret passes an empty
+          # string, which electron-builder treats as "here's a
+          # certificate path" and fails trying to read it. Add these back
+          # once real signing credentials exist in repo Settings > Secrets:
+          #   CSC_LINK: ${{ secrets.CSC_LINK }}
+          #   CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          #   APPLE_ID: ${{ secrets.APPLE_ID }}
+          #   APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          #   APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
 
       - name: Build only (manual test run)
         if: github.event_name == 'workflow_dispatch'
