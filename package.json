@@ -36,6 +36,7 @@
     "directories": { "output": "release" },
     "publish": {
       "provider": "github"
+      "releaseType": "release"
     },
     "mac": {
       "target": "dmg",
