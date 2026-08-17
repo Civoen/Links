@@ -1,6 +1,6 @@
 {
   "name": "links-app",
-  "version": "0.1.0",
+  "version": "0.1.4",
   "private": true,
   "description": "Links — a Spotify companion app that keeps chained tracks together during shuffle.",
   "main": "dist-electron/main.js",
