@@ -46,6 +46,19 @@ export function saveLink(tracks: TrackSummary[]): Link {
   return link;
 }
 
+export function updateLink(id: string, tracks: TrackSummary[]): void {
+  if (tracks.length < 2) {
+    throw new Error("A link needs at least two tracks");
+  }
+
+  const links = readAll();
+  const index = links.findIndex((l) => l.id === id);
+  if (index === -1) throw new Error("Link not found");
+
+  links[index] = { ...links[index], tracks };
+  writeAll(links);
+}
+
 export function deleteLink(id: string): void {
   writeAll(readAll().filter((l) => l.id !== id));
 }
@@ -59,4 +72,42 @@ export function findLinkByTrackUri(
     if (index !== -1) return { link, index };
   }
   return null;
+}
+
+/**
+ * Fills in album art/album name/duration for tracks saved before those
+ * fields existed. Takes a map of URI -> metadata (built by fetching from
+ * Spotify) and patches every stored link that has a matching track
+ * missing that data, writing back once.
+ */
+export function backfillTrackMetadata(
+  metadataByUri: Map<string, Pick<TrackSummary, "album" | "albumArt" | "durationMs">>
+): void {
+  if (metadataByUri.size === 0) return;
+
+  const links = readAll();
+  let changed = false;
+
+  for (const link of links) {
+    for (const track of link.tracks) {
+      if (track.albumArt) continue;
+      const meta = metadataByUri.get(track.uri);
+      if (!meta) continue;
+      Object.assign(track, meta);
+      changed = true;
+    }
+  }
+
+  if (changed) writeAll(links);
+}
+
+/** Every track URI, across all links, that's missing album art. */
+export function findTracksMissingArt(): string[] {
+  const uris = new Set<string>();
+  for (const link of readAll()) {
+    for (const track of link.tracks) {
+      if (!track.albumArt) uris.add(track.uri);
+    }
+  }
+  return [...uris];
 }

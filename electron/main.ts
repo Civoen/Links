@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain } from "electron";
+import { app, BrowserWindow, ipcMain, Menu } from "electron";
 import path from "path";
 import { autoUpdater } from "electron-updater";
 import {
@@ -7,17 +7,28 @@ import {
   isConnected,
   disconnect
 } from "./spotifyAuth";
-import { searchTracks, getPlaybackState } from "./spotifyApi";
-import { getLinks, saveLink, deleteLink } from "./linkStore";
+import {
+  searchTracks,
+  getPlaybackState,
+  getTracksByUri,
+  getUserPlaylists,
+  getPlaylistTracks
+} from "./spotifyApi";
+import {
+  getLinks,
+  saveLink,
+  updateLink,
+  deleteLink,
+  findTracksMissingArt,
+  backfillTrackMetadata
+} from "./linkStore";
 import { startLinkEngine, stopLinkEngine } from "./linkEngine";
 import { getClientId, setClientId } from "./settings";
+import { findSuggestedLinks } from "./suggestions";
 
 const PROTOCOL = "links";
 let mainWindow: BrowserWindow | null = null;
 
-// Only one instance of Links should run at a time — the link engine polls
-// Spotify on an interval, and two instances doing that would double up on
-// "add to queue" calls.
 const gotSingleInstanceLock = app.requestSingleInstanceLock();
 if (!gotSingleInstanceLock) {
   app.quit();
@@ -48,20 +59,21 @@ function registerProtocolHandling() {
     app.setAsDefaultProtocolClient(PROTOCOL);
   }
 
-  // Windows/Linux: the OAuth redirect arrives as argv on a second launch,
-  // which requestSingleInstanceLock() forwards here instead of opening a
-  // second window.
   app.on("second-instance", (_event, argv) => {
     const url = argv.find((arg) => arg.startsWith(`${PROTOCOL}://`));
     if (url) handleAuthCallback(url).then(() => mainWindow?.webContents.send("auth:updated"));
     mainWindow?.focus();
   });
 
-  // macOS: the redirect arrives via this event instead.
   app.on("open-url", (event, url) => {
     event.preventDefault();
     handleAuthCallback(url).then(() => mainWindow?.webContents.send("auth:updated"));
   });
+}
+
+/** Forwards a description of what the engine just did to the renderer, for the in-app notification. */
+function notifyRendererOfEngineAction(message: string) {
+  mainWindow?.webContents.send("engine:action", message);
 }
 
 function registerIpcHandlers() {
@@ -69,7 +81,7 @@ function registerIpcHandlers() {
 
   ipcMain.handle("auth:start", async () => {
     await startAuth();
-    startLinkEngine();
+    startLinkEngine(notifyRendererOfEngineAction);
     return true;
   });
 
@@ -84,26 +96,57 @@ function registerIpcHandlers() {
   ipcMain.handle("tracks:search", (_event, query: string) => searchTracks(query));
 
   ipcMain.handle("links:get", () => getLinks());
-
   ipcMain.handle("links:save", (_event, tracks) => saveLink(tracks));
-
+  ipcMain.handle("links:update", (_event, id: string, tracks) => updateLink(id, tracks));
   ipcMain.handle("links:delete", (_event, id: string) => deleteLink(id));
 
   ipcMain.handle("playback:get", () => getPlaybackState());
+
+  ipcMain.handle("playlists:list", () => getUserPlaylists());
+  ipcMain.handle("playlists:suggestions", async (_event, playlistId: string) => {
+    const tracks = await getPlaylistTracks(playlistId);
+    return findSuggestedLinks(tracks);
+  });
+}
+
+/**
+ * One-time cleanup for links saved before album art/duration were
+ * tracked: finds any track missing that data, fetches it from Spotify,
+ * and patches storage. Runs once on startup; after the first successful
+ * pass every link has the data going forward, so this becomes a fast
+ * no-op on future launches.
+ */
+async function backfillMissingAlbumArt() {
+  try {
+    const missingUris = findTracksMissingArt();
+    if (missingUris.length === 0) return;
+
+    const fetched = await getTracksByUri(missingUris);
+    const metadataByUri = new Map(
+      fetched.map((t) => [t.uri, { album: t.album, albumArt: t.albumArt, durationMs: t.durationMs }])
+    );
+
+    backfillTrackMetadata(metadataByUri);
+  } catch (err) {
+    console.error("[backfill] failed:", err);
+  }
 }
 
 app.whenReady().then(() => {
+  // Removes the default File/Edit/View/Window/Help menu bar. Links has no
+  // use for it — every action lives in the app's own UI.
+  Menu.setApplicationMenu(null);
+
   registerProtocolHandling();
   registerIpcHandlers();
   createWindow();
 
-  if (isConnected()) startLinkEngine();
+  if (isConnected()) {
+    startLinkEngine(notifyRendererOfEngineAction);
+    backfillMissingAlbumArt();
+  }
 
   if (process.env.NODE_ENV !== "development") {
-    // Checks the GitHub Releases feed configured in package.json's "build"
-    // block and silently downloads + prompts to install if there's a newer
-    // version. No-ops harmlessly if the app isn't running from a real
-    // installed build (e.g. during local testing).
     autoUpdater.checkForUpdatesAndNotify().catch((err) => {
       console.error("[updater] check failed:", err);
     });
@@ -115,9 +158,6 @@ app.whenReady().then(() => {
 });
 
 app.on("window-all-closed", () => {
-  // Keep the link engine running in the background on macOS even with no
-  // window open, matching the "reliability shouldn't depend on a window
-  // being open" architecture decision. Fully quit on Windows/Linux.
   if (process.platform !== "darwin") {
     stopLinkEngine();
     app.quit();

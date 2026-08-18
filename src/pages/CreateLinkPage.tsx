@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { TrackSummary } from "../../electron/spotifyApi";
+import type { Link } from "../../electron/linkStore";
 import TrackSearch from "../components/TrackSearch";
 
 function formatDuration(ms?: number): string {
@@ -11,13 +12,17 @@ function formatDuration(ms?: number): string {
 }
 
 export default function CreateLinkPage({
+  editingLink,
+  initialTracks,
   onSaved,
   onCancel
 }: {
+  editingLink?: Link;
+  initialTracks?: TrackSummary[];
   onSaved: () => void;
   onCancel: () => void;
 }) {
-  const [tracks, setTracks] = useState<TrackSummary[]>([]);
+  const [tracks, setTracks] = useState<TrackSummary[]>(editingLink?.tracks ?? initialTracks ?? []);
   const [insertAt, setInsertAt] = useState<number | null>(null);
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
@@ -52,8 +57,7 @@ export default function CreateLinkPage({
     setTracks((current) => {
       const next = [...current];
       const [moved] = next.splice(draggedIndex, 1);
-      const adjustedTarget = draggedIndex < targetIndex ? targetIndex - 1 : targetIndex;
-      next.splice(adjustedTarget, 0, moved);
+      next.splice(targetIndex, 0, moved);
       return next;
     });
     setDraggedIndex(null);
@@ -69,7 +73,11 @@ export default function CreateLinkPage({
     setError(null);
     setSaving(true);
     try {
-      await window.linksAPI.saveLink(tracks);
+      if (editingLink) {
+        await window.linksAPI.updateLink(editingLink.id, tracks);
+      } else {
+        await window.linksAPI.saveLink(tracks);
+      }
       onSaved();
     } catch (err) {
       console.error(err);
@@ -78,10 +86,12 @@ export default function CreateLinkPage({
     }
   }
 
+  const title = editingLink ? "Edit link" : "Create a link";
+
   if (insertAt !== null) {
     return (
       <div className="screen screen-narrow">
-        <h1 className="page-title">Create a link</h1>
+        <h1 className="page-title">{title}</h1>
         <TrackSearch onPick={handlePick} onClose={() => setInsertAt(null)} />
       </div>
     );
@@ -89,7 +99,7 @@ export default function CreateLinkPage({
 
   return (
     <div className="screen screen-narrow">
-      <h1 className="page-title">Create a link</h1>
+      <h1 className="page-title">{title}</h1>
       <p className="muted">
         Search for tracks, drag to reorder, and add more anywhere in the chain.
       </p>
@@ -175,9 +185,8 @@ export default function CreateLinkPage({
 function InsertPoint({ onClick }: { onClick: () => void }) {
   return (
     <button className="insert-point" onClick={onClick}>
-      <span className="insert-point-line" />
       <span className="insert-point-plus">+</span>
-      <span className="insert-point-line" />
+      Add track
     </button>
   );
 }

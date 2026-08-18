@@ -5,31 +5,20 @@ import { POLL_INTERVAL_MS } from "./config";
 // Design rules this engine follows:
 // 1. Forward-only chaining: whatever track is currently playing, if it's
 //    part of a link and isn't the last track in it, queue the next one.
-//    Links never checks or cares how the current track was reached —
-//    shuffle, a manual tap from search, an album, Liked Songs, or Links
-//    itself queuing it a moment earlier.
 // 2. Out-of-order correction (best-effort): if a later track in a chain is
 //    sitting in the upcoming queue before its predecessor has played,
-//    Links queues the predecessor so it plays first. This only works
-//    *before* the later track starts playing — once something's actually
-//    playing, nothing can un-play it, and Links won't skip backward to
-//    force a redo. It also depends on Spotify's queue-reading endpoint,
-//    which is documented as sometimes returning stale or inconsistent
-//    results, so this is a best-effort improvement, not a guarantee.
-// 3. Never hijack playback: no skipping, no removing from the queue, no
-//    forcing a predecessor to play first by interrupting what's already
-//    playing. Only ever add a track to "up next".
-// 4. Idempotent: since this runs on a poll, the same observation will be
-//    seen on many consecutive ticks. Only act once per situation, not
-//    once per tick.
+//    Links queues the predecessor so it plays first.
+// 3. Never hijack playback: only ever add a track to "up next".
+// 4. Idempotent: only act once per situation, not once per tick.
 
 let pollHandle: ReturnType<typeof setInterval> | null = null;
 let lastActionedTrackUri: string | null = null;
-
-// Tracks which (linkId, index) out-of-order corrections have already been
-// made, so a lingering "successor still in queue" observation across many
-// poll ticks doesn't trigger repeat inserts of the same predecessor.
 const handledCorrections = new Set<string>();
+
+// Fires with a short human-readable description whenever the engine
+// actually queues something — used to surface a small in-app notification
+// rather than the action happening silently.
+let onAction: ((message: string) => void) | null = null;
 
 async function tick() {
   try {
@@ -47,13 +36,10 @@ async function tick() {
 
     await handleOutOfOrderCorrection(state.trackUri);
   } catch (err) {
-    // Swallow and retry on the next tick — a single failed poll (network
-    // blip, expired token mid-refresh, etc.) shouldn't stop the engine.
     console.error("[linkEngine] tick failed:", err);
   }
 }
 
-/** Rule 1: queue the next track in a chain once its predecessor starts playing. */
 async function handleForwardChaining(currentTrackUri: string) {
   const match = findLinkByTrackUri(currentTrackUri);
   if (!match) return;
@@ -64,9 +50,9 @@ async function handleForwardChaining(currentTrackUri: string) {
 
   const next = link.tracks[index + 1];
   await addToQueue(next.uri);
+  onAction?.(`Queued "${next.name}" next`);
 }
 
-/** Rule 2: catch a successor sitting in the queue ahead of its predecessor. */
 async function handleOutOfOrderCorrection(currentTrackUri: string) {
   const links = getLinks();
   if (links.length === 0) return;
@@ -82,8 +68,6 @@ async function handleOutOfOrderCorrection(currentTrackUri: string) {
 
       const successorIsUpcoming = queueUris.includes(successor.uri);
       if (!successorIsUpcoming) {
-        // Nothing to fix right now — clear any stale record so a future
-        // occurrence of this same situation can be handled fresh.
         handledCorrections.delete(correctionKey);
         continue;
       }
@@ -91,26 +75,18 @@ async function handleOutOfOrderCorrection(currentTrackUri: string) {
       const predecessorAlreadyInPlace =
         predecessor.uri === currentTrackUri || queueUris.includes(predecessor.uri);
 
-      if (predecessorAlreadyInPlace) {
-        // Either the predecessor is playing right now, or it's already
-        // queued too (most likely because Links itself put it there via
-        // forward chaining) — nothing out of order here.
-        continue;
-      }
-
-      if (handledCorrections.has(correctionKey)) {
-        // Already inserted the predecessor for this occurrence; waiting
-        // for it to actually play rather than inserting it repeatedly.
-        continue;
-      }
+      if (predecessorAlreadyInPlace) continue;
+      if (handledCorrections.has(correctionKey)) continue;
 
       handledCorrections.add(correctionKey);
       await addToQueue(predecessor.uri);
+      onAction?.(`Moved "${predecessor.name}" ahead of "${successor.name}"`);
     }
   }
 }
 
-export function startLinkEngine() {
+export function startLinkEngine(actionCallback?: (message: string) => void) {
+  if (actionCallback) onAction = actionCallback;
   if (pollHandle) return;
   pollHandle = setInterval(tick, POLL_INTERVAL_MS);
 }
