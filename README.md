@@ -78,56 +78,110 @@ push an update to everyone already running the app.
 Links is a downloaded desktop app, not a website — Cloudflare Pages can't
 host or run it directly. The split used here:
 
-- **GitHub Actions** (`.github/workflows/release.yml`) builds a Windows,
-  macOS, and Linux installer with `electron-builder` and attaches them to
-  a GitHub Release whenever you push a version tag:
+- **GitHub Actions** (`.github/workflows/release.yml`) builds a Windows
+  installer and a Linux AppImage with `electron-builder` and attaches
+  them to a GitHub Release whenever you push a version tag:
   ```
   git tag v0.1.0
   git push origin v0.1.0
   ```
+  **macOS is intentionally not built.** Without an Apple Developer
+  Program membership ($99/year) to sign and notarize the app, current
+  macOS versions don't just warn on unsigned Electron apps — `syspolicyd`
+  actively deletes them on first launch based on the app's generic,
+  unsigned identity (`team: null, id: Electron`), with no user override.
+  That's confirmed via the actual system log, not a guess — see the
+  `Attempting to move malware to trash` / `Successfully moved malware to
+  trash` entries this produces. There's no point shipping a build that
+  can't be opened. To bring macOS back once signing is affordable: add
+  `macos-latest` to the `os` matrix in the workflow, and uncomment the
+  `CSC_LINK`/`CSC_KEY_PASSWORD`/`APPLE_*` secret references — everything
+  else is already wired for it.
 - **`site/`** is a plain static landing page — no build step — with
-  download buttons pointing at `github.com/<you>/<repo>/releases/latest`
-  (that URL always redirects to the newest release, so it never needs
-  updating). Point a Cloudflare Pages project at this repo with the build
-  output directory set to `site` and no build command, and it deploys as
-  the marketing/download site.
+  download buttons pointing directly at each platform's file via
+  `github.com/<you>/<repo>/releases/latest/download/<filename>`. That URL
+  pattern always serves the named file from whichever release is newest,
+  with no version number in the link — but only because `win.artifactName`
+  and `linux.artifactName` in `package.json`'s `build` config are fixed
+  strings (`Links-Setup.exe`, `Links.AppImage`) rather than the
+  version-stamped default electron-builder normally uses. If you ever
+  change those artifact names, update the matching links in
+  `site/index.html` too, or the download buttons will silently 404. Point
+  a Cloudflare Pages project at this repo with the build output directory
+  set to `site` and no build command, and it deploys as the
+  marketing/download site.
 
-Before your first tagged release, replace `YOUR_GITHUB_USERNAME` in
-`site/index.html` with your actual GitHub username or org.
+Already set up to point at this repo — the username in `site/index.html`
+is `Civoen`, matching this project's actual GitHub account.
+
+## Editing site content without touching code
+
+`site/admin.html` is a password-protected page for updating the hero
+headline, subtext, and the two example tracks (title, artist, cover
+image URL) shown on the landing page — no code edits or redeploys
+needed. It's backed by a Cloudflare Pages Function
+(`functions/api/content.js`) and a KV namespace for storage, both of
+which need one-time setup in Cloudflare's dashboard (not something a
+file in this repo can configure on its own):
+
+1. **Create a KV namespace.** Cloudflare dashboard → Workers & Pages →
+   KV → Create namespace. Name it anything (e.g. `links-content`).
+2. **Bind it to this Pages project.** Your Pages project → Settings →
+   Functions → KV namespace bindings → Add binding. Variable name must
+   be exactly `CONTENT_KV`, pointing at the namespace you just created.
+3. **Set the admin password.** Same Pages project → Settings →
+   Environment variables → Add variable. Name it `ADMIN_PASSWORD`, mark
+   it **Secret** (not plaintext), and use a long, random value — this is
+   the only thing standing between the public and editing your site's
+   content, so treat it like any other credential. Never put the actual
+   password in a commit; the Function reads it from this environment
+   variable at request time.
+4. Redeploy (or trigger a new deployment) so the Function picks up the
+   binding and the variable.
+
+Once that's done, `your-site.pages.dev/admin.html` is the editing
+interface. The public landing page fetches `/api/content` on every load
+and falls back to sensible defaults if the Function or KV isn't set up
+yet — so skipping this setup doesn't break the site, it just means the
+content stays at the defaults baked into `site/index.html` until you do.
+
+Cover images are entered as a URL, not uploaded — paste a link to an
+image hosted elsewhere. There's no file storage wired up for uploads;
+adding that later would mean bringing in Cloudflare R2 (their S3-
+compatible object storage), a bigger addition than this needed for now.
 
 ## Icon
 
 `build/icon-source.svg` is the master — the same link glyph used
-throughout the UI, rendered into `icon.icns` (macOS), `icon.ico`
-(Windows), and `icon.png` (Linux). `electron-builder` picks these up
-automatically via the `icon` field in `package.json`'s `build` config.
-Regenerating them after a design change: edit the SVG, then re-render at
-each required size (see git history for the original render script, built
-with `cairosvg` + `Pillow` + `icnsutil`).
+throughout the UI, rendered into `icon.icns` (kept for whenever macOS
+support returns), `icon.ico` (Windows), and `icon.png` (Linux).
+`electron-builder` picks these up automatically via the `icon` field in
+`package.json`'s `build` config. Regenerating them after a design change:
+edit the SVG, then re-render at each required size (see git history for
+the original render script, built with `cairosvg` + `Pillow` +
+`icnsutil`).
 
 ## Code signing
 
-Currently unsigned — installers work, but macOS Gatekeeper and Windows
-SmartScreen will warn on first open. The release workflow already reads
-`CSC_LINK` / `CSC_KEY_PASSWORD` (both platforms) and `APPLE_ID` /
-`APPLE_APP_SPECIFIC_PASSWORD` / `APPLE_TEAM_ID` (macOS notarization) as
-environment variables — `electron-builder` picks them up automatically
-when present and silently skips signing when they're not, so nothing
-about today's builds breaks by their absence.
+Currently unsigned on Windows — the installer works, but SmartScreen
+warns on first open (one-time, "More info" → "Run anyway"). The release
+workflow already reads `CSC_LINK` / `CSC_KEY_PASSWORD` as environment
+variables for Windows signing; `electron-builder` picks them up
+automatically when present and silently skips signing when they're not,
+so nothing about today's builds breaks by their absence.
 
-To turn signing on:
+To turn on Windows signing: buy a code signing certificate from a CA
+(DigiCert, SSL.com, etc), add its contents as the `CSC_LINK` repo secret
+(base64 or file URL, per electron-builder's docs) and its password as
+`CSC_KEY_PASSWORD`, under repo **Settings → Secrets and variables →
+Actions**. The next tagged release picks them up with no workflow
+changes needed.
 
-1. **Windows**: buy a code signing certificate from a CA (DigiCert,
-   SSL.com, etc). Add its contents as the `CSC_LINK` repo secret (base64
-   or file URL, per electron-builder's docs) and its password as
-   `CSC_KEY_PASSWORD`.
-2. **macOS**: enroll in the Apple Developer Program, generate a
-   "Developer ID Application" certificate for `CSC_LINK`/
-   `CSC_KEY_PASSWORD`, and set `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`,
-   and `APPLE_TEAM_ID` for notarization.
-3. Add all of these under repo **Settings → Secrets and variables →
-   Actions**. The next tagged release picks them up with no workflow
-   changes needed.
+macOS signing (Apple Developer Program enrollment, a "Developer ID
+Application" certificate, and notarization via `APPLE_ID`/
+`APPLE_APP_SPECIFIC_PASSWORD`/`APPLE_TEAM_ID`) is the one thing that
+would actually let macOS builds ship again — see the distribution
+section above for what that involves.
 
 ## Known gaps to close before a real release
 
