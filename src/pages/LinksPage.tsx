@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import type { Link } from "../../electron/linkStore";
-import logoUrl from "../assets/logo.png";
 import LinkGlyph from "../components/LinkGlyph";
 import Toast from "../components/Toast";
+import OverflowMenu from "../components/OverflowMenu";
 
 function formatDuration(ms?: number): string {
   if (!ms) return "";
@@ -10,6 +10,14 @@ function formatDuration(ms?: number): string {
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
   return `${minutes}:${seconds.toString().padStart(2, "0")}`;
+}
+
+/** "Artist — Collection" using the first track's artist/album, matching how a
+ *  multi-part release is usually described. Falls back gracefully for older
+ *  or manually-built links that might be missing album metadata. */
+function linkTitle(link: Link): string {
+  const first = link.tracks[0];
+  return first.album ? `${first.artist} — ${first.album}` : first.artist;
 }
 
 interface PendingDelete {
@@ -21,13 +29,11 @@ interface PendingDelete {
 export default function LinksPage({
   onCreateLink,
   onEditLink,
-  onOpenSettings,
-  onOpenSuggestions
+  onOpenDiscover
 }: {
   onCreateLink: () => void;
   onEditLink: (link: Link) => void;
-  onOpenSettings: () => void;
-  onOpenSuggestions: () => void;
+  onOpenDiscover: () => void;
 }) {
   const [links, setLinks] = useState<Link[] | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -43,9 +49,6 @@ export default function LinksPage({
   }
 
   function handleDelete(link: Link) {
-    // Optimistically remove it from view immediately, but hold off on the
-    // actual backend delete for a few seconds in case of Undo — nothing
-    // is really gone until the timer below fires.
     if (pendingDelete.current) finalizePendingDelete();
 
     const index = links?.findIndex((l) => l.id === link.id) ?? -1;
@@ -58,7 +61,7 @@ export default function LinksPage({
     }, 5000);
 
     pendingDelete.current = { link, index, timeoutId };
-    setPendingDeleteMessage(`Deleted "${link.tracks[0].name}" link`);
+    setPendingDeleteMessage(`Deleted "${linkTitle(link)}" link`);
   }
 
   function finalizePendingDelete() {
@@ -90,27 +93,17 @@ export default function LinksPage({
 
   return (
     <div className="screen">
-      <div className="page-header">
-        <div className="brand">
-          <img className="brand-icon" src={logoUrl} alt="" />
-          <span className="brand-name">Links</span>
-        </div>
-        <div className="page-header-actions">
-          <button className="btn btn-primary" onClick={onCreateLink}>
+      <div className="list-header">
+        <p className="list-header-count">{linkCount} active link{linkCount === 1 ? "" : "s"}</p>
+        <div className="list-header-actions">
+          <button className="btn btn-secondary" onClick={onCreateLink}>
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><path d="M12 5v14M5 12h14" /></svg>
             Create link
           </button>
-          <button className="icon-btn" aria-label="Suggested links" onClick={onOpenSuggestions}>
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 3v2M12 19v2M5 5l1.5 1.5M17.5 17.5L19 19M3 12h2M19 12h2M5 19l1.5-1.5M17.5 6.5L19 5" />
-              <circle cx="12" cy="12" r="3" />
-            </svg>
-          </button>
-          <button className="icon-btn" aria-label="Settings" onClick={onOpenSettings}>
-            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <circle cx="12" cy="12" r="3" />
-              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
-            </svg>
-          </button>
+          <OverflowMenu
+            ariaLabel="More actions"
+            items={[{ label: "Scan a playlist for suggested links", onClick: onOpenDiscover }]}
+          />
         </div>
       </div>
 
@@ -131,6 +124,7 @@ export default function LinksPage({
       <div className="link-list">
         {links?.map((link) => {
           const isExpanded = expandedId === link.id;
+          const cover = link.tracks[0].albumArt;
 
           return (
             <div className={`link-card${isExpanded ? " link-card-expanded" : ""}`} key={link.id}>
@@ -139,25 +133,15 @@ export default function LinksPage({
                 onClick={() => toggleExpanded(link.id)}
                 aria-expanded={isExpanded}
               >
-                <div className="link-chain-thumbs">
-                  {link.tracks.map((track, i) => (
-                    <div className="link-chain-thumb-wrap" key={track.uri + i}>
-                      {track.albumArt ? (
-                        <img className="link-chain-thumb" src={track.albumArt} alt={track.name} />
-                      ) : (
-                        <div className="link-chain-thumb link-chain-thumb-empty" title={track.name} />
-                      )}
-                      {i < link.tracks.length - 1 && (
-                        <span className="link-chain-connector">
-                          <LinkGlyph size={11} />
-                        </span>
-                      )}
-                    </div>
-                  ))}
-                </div>
+                {cover ? (
+                  <img className="link-cover" src={cover} alt="" />
+                ) : (
+                  <div className="link-cover link-cover-empty" />
+                )}
 
                 <div className="link-card-body">
-                  <p className="link-track-names">
+                  <p className="link-title">{linkTitle(link)}</p>
+                  <p className="link-subtitle">
                     {link.tracks.map((track, i) => (
                       <span className="link-track-name-part" key={track.uri + i}>
                         {track.name}
@@ -169,51 +153,18 @@ export default function LinksPage({
                       </span>
                     ))}
                   </p>
-                  <p className="link-meta">
-                    {link.tracks[0].artist} · {link.tracks.length} tracks
-                  </p>
                 </div>
 
-                <span className="link-card-actions">
-                  <span
-                    className="icon-btn"
-                    role="button"
-                    tabIndex={0}
-                    aria-label={`Edit link: ${link.tracks.map((t) => t.name).join(" then ")}`}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onEditLink(link);
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === " ") {
-                        e.stopPropagation();
-                        onEditLink(link);
-                      }
-                    }}
-                  >
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M12 20h9" />
-                      <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z" />
-                    </svg>
-                  </span>
-                  <span
-                    className="icon-btn"
-                    role="button"
-                    tabIndex={0}
-                    aria-label={`Delete link: ${link.tracks.map((t) => t.name).join(" then ")}`}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleDelete(link);
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" || e.key === " ") {
-                        e.stopPropagation();
-                        handleDelete(link);
-                      }
-                    }}
-                  >
-                    ✕
-                  </span>
+                <span className="active-badge">Active</span>
+
+                <span onClick={(e) => e.stopPropagation()}>
+                  <OverflowMenu
+                    ariaLabel={`More actions for ${linkTitle(link)}`}
+                    items={[
+                      { label: "Edit", onClick: () => onEditLink(link) },
+                      { label: "Delete", onClick: () => handleDelete(link), danger: true }
+                    ]}
+                  />
                 </span>
               </button>
 
@@ -244,10 +195,19 @@ export default function LinksPage({
       </div>
 
       {links !== null && links.length > 0 && (
-        <p className="status-line">
-          <span className="status-dot" />
-          Watching {linkCount} link{linkCount === 1 ? "" : "s"} for shuffle
-        </p>
+        <>
+          <div className="list-footnote">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" style={{ flexShrink: 0, marginTop: 1 }}>
+              <circle cx="12" cy="12" r="10" />
+              <path d="M12 16v-4M12 8h.01" />
+            </svg>
+            Links only adds to your queue. It never skips or removes songs.
+          </div>
+          <p className="status-line">
+            <span className="status-dot" />
+            Watching {linkCount} link{linkCount === 1 ? "" : "s"} for shuffle
+          </p>
+        </>
       )}
 
       {pendingDeleteMessage && (

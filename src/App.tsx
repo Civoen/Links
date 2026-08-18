@@ -3,28 +3,31 @@ import ConnectPage from "./pages/ConnectPage";
 import LinksPage from "./pages/LinksPage";
 import CreateLinkPage from "./pages/CreateLinkPage";
 import SettingsPage from "./pages/SettingsPage";
-import SuggestionsPage from "./pages/SuggestionsPage";
+import DiscoverPage from "./pages/DiscoverPage";
+import AboutPage from "./pages/AboutPage";
+import Sidebar, { type SidebarSection } from "./components/Sidebar";
 import Toast from "./components/Toast";
 import type { Link } from "../electron/linkStore";
 import type { TrackSummary } from "../electron/spotifyApi";
 
-type Screen = "loading" | "connect" | "links" | "create" | "edit" | "settings" | "suggestions";
+type Screen = "loading" | "connect" | "shell" | "create" | "edit";
 
 export default function App() {
   const [screen, setScreen] = useState<Screen>("loading");
+  const [activeSection, setActiveSection] = useState<SidebarSection>("links");
   const [editingLink, setEditingLink] = useState<Link | null>(null);
   const [prefillTracks, setPrefillTracks] = useState<TrackSummary[] | null>(null);
   const [engineMessage, setEngineMessage] = useState<string | null>(null);
 
   useEffect(() => {
     window.linksAPI.isConnected().then((connected) => {
-      setScreen(connected ? "links" : "connect");
+      setScreen(connected ? "shell" : "connect");
     });
 
-    const unsubscribeAuth = window.linksAPI.onAuthUpdated(() => setScreen("links"));
+    const unsubscribeAuth = window.linksAPI.onAuthUpdated(() => setScreen("shell"));
 
     // Fires whenever the link engine actually queues something — shown as
-    // a brief notification regardless of which screen is currently open.
+    // a brief notification regardless of which section is currently open.
     const unsubscribeEngine = window.linksAPI.onEngineAction((message) => {
       setEngineMessage(message);
     });
@@ -42,7 +45,7 @@ export default function App() {
   );
 
   if (screen === "connect") {
-    return <ConnectPage onConnected={() => setScreen("links")} />;
+    return <ConnectPage onConnected={() => setScreen("shell")} />;
   }
 
   if (screen === "create") {
@@ -52,11 +55,12 @@ export default function App() {
           initialTracks={prefillTracks ?? undefined}
           onSaved={() => {
             setPrefillTracks(null);
-            setScreen("links");
+            setActiveSection("links");
+            setScreen("shell");
           }}
           onCancel={() => {
             setPrefillTracks(null);
-            setScreen("links");
+            setScreen("shell");
           }}
         />
         {engineToast}
@@ -71,38 +75,12 @@ export default function App() {
           editingLink={editingLink}
           onSaved={() => {
             setEditingLink(null);
-            setScreen("links");
+            setActiveSection("links");
+            setScreen("shell");
           }}
           onCancel={() => {
             setEditingLink(null);
-            setScreen("links");
-          }}
-        />
-        {engineToast}
-      </>
-    );
-  }
-
-  if (screen === "settings") {
-    return (
-      <>
-        <SettingsPage
-          onBack={() => setScreen("links")}
-          onDisconnected={() => setScreen("connect")}
-        />
-        {engineToast}
-      </>
-    );
-  }
-
-  if (screen === "suggestions") {
-    return (
-      <>
-        <SuggestionsPage
-          onBack={() => setScreen("links")}
-          onCreateFromSuggestion={(tracks) => {
-            setPrefillTracks(tracks);
-            setScreen("create");
+            setScreen("shell");
           }}
         />
         {engineToast}
@@ -111,17 +89,36 @@ export default function App() {
   }
 
   return (
-    <>
-      <LinksPage
-        onCreateLink={() => setScreen("create")}
-        onEditLink={(link) => {
-          setEditingLink(link);
-          setScreen("edit");
-        }}
-        onOpenSettings={() => setScreen("settings")}
-        onOpenSuggestions={() => setScreen("suggestions")}
-      />
+    <div className="app-shell">
+      <Sidebar active={activeSection} onNavigate={setActiveSection} />
+      <div className="app-shell-content">
+        {activeSection === "links" && (
+          <LinksPage
+            onCreateLink={() => setScreen("create")}
+            onEditLink={(link) => {
+              setEditingLink(link);
+              setScreen("edit");
+            }}
+            onOpenDiscover={() => setActiveSection("discover")}
+          />
+        )}
+
+        {activeSection === "discover" && (
+          <DiscoverPage
+            onCreateFromSuggestion={(tracks) => {
+              setPrefillTracks(tracks);
+              setScreen("create");
+            }}
+          />
+        )}
+
+        {activeSection === "settings" && (
+          <SettingsPage onDisconnected={() => setScreen("connect")} />
+        )}
+
+        {activeSection === "about" && <AboutPage />}
+      </div>
       {engineToast}
-    </>
+    </div>
   );
 }

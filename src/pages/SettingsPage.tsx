@@ -1,10 +1,8 @@
 import { useEffect, useState } from "react";
 
 export default function SettingsPage({
-  onBack,
   onDisconnected
 }: {
-  onBack: () => void;
   onDisconnected: () => void;
 }) {
   const [clientId, setClientIdValue] = useState("");
@@ -57,14 +55,7 @@ export default function SettingsPage({
 
   return (
     <div className="screen screen-narrow">
-      <div className="settings-header">
-        <button className="icon-btn" aria-label="Back to your links" onClick={onBack}>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M15 18l-6-6 6-6" />
-          </svg>
-        </button>
-        <h1 className="page-title">Settings</h1>
-      </div>
+      <h1 className="page-title">Settings</h1>
 
       <div className="settings-section">
         <p className="settings-section-title">Spotify account</p>

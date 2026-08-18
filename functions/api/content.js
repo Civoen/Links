@@ -6,12 +6,11 @@
 const CONTENT_KEY = "site-content";
 
 const DEFAULT_CONTENT = {
-  heroHeadline: "Shuffle chaos, fixed.",
   heroSubtext:
-    "Links keeps chained tracks playing in order, always — without turning off shuffle for everything else.",
+    "Links keeps multi-part tracks and sequences you choose playing in order — even when Spotify is on shuffle.",
   tracks: [
     { title: "Pain Remains I: Dancing Like Flames", artist: "Lorna Shore", coverUrl: "" },
-    { title: "Das Album Intro", artist: "We Butter The Bread With Butter", coverUrl: "" }
+    { title: "Pain Remains II: After All I've Done, I'll Disappear", artist: "Lorna Shore", coverUrl: "" }
   ]
 };
 
