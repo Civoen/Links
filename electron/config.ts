@@ -11,7 +11,9 @@ export const REDIRECT_URI = "links://callback";
 export const SCOPES = [
   "user-read-currently-playing",
   "user-read-playback-state",
-  "user-modify-playback-state"
+  "user-modify-playback-state",
+  "playlist-read-private",
+  "playlist-read-collaborative"
 ].join(" ");
 
 // How often the link engine checks what's currently playing. Spotify's Web

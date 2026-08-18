@@ -10,7 +10,7 @@ import Toast from "./components/Toast";
 import type { Link } from "../electron/linkStore";
 import type { TrackSummary } from "../electron/spotifyApi";
 
-type Screen = "loading" | "connect" | "shell" | "create" | "edit";
+type Screen = "loading" | "connect" | "shell";
 
 export default function App() {
   const [screen, setScreen] = useState<Screen>("loading");
@@ -28,6 +28,8 @@ export default function App() {
 
     // Fires whenever the link engine actually queues something — shown as
     // a brief notification regardless of which section is currently open.
+    // The main process already checks the "show notifications" setting
+    // before sending this at all, so nothing extra to gate here.
     const unsubscribeEngine = window.linksAPI.onEngineAction((message) => {
       setEngineMessage(message);
     });
@@ -37,6 +39,31 @@ export default function App() {
       unsubscribeEngine();
     };
   }, []);
+
+  /** Entered via the sidebar or the Links page's own "Create link" button — always starts fresh. */
+  function goToFreshCreate() {
+    setEditingLink(null);
+    setPrefillTracks(null);
+    setActiveSection("create");
+  }
+
+  function goToEdit(link: Link) {
+    setPrefillTracks(null);
+    setEditingLink(link);
+    setActiveSection("create");
+  }
+
+  function goToCreateFromSuggestion(tracks: TrackSummary[]) {
+    setEditingLink(null);
+    setPrefillTracks(tracks);
+    setActiveSection("create");
+  }
+
+  function returnToLinksAfterEditor() {
+    setEditingLink(null);
+    setPrefillTracks(null);
+    setActiveSection("links");
+  }
 
   if (screen === "loading") return null;
 
@@ -48,68 +75,42 @@ export default function App() {
     return <ConnectPage onConnected={() => setScreen("shell")} />;
   }
 
-  if (screen === "create") {
-    return (
-      <>
-        <CreateLinkPage
-          initialTracks={prefillTracks ?? undefined}
-          onSaved={() => {
-            setPrefillTracks(null);
-            setActiveSection("links");
-            setScreen("shell");
-          }}
-          onCancel={() => {
-            setPrefillTracks(null);
-            setScreen("shell");
-          }}
-        />
-        {engineToast}
-      </>
-    );
-  }
-
-  if (screen === "edit" && editingLink) {
-    return (
-      <>
-        <CreateLinkPage
-          editingLink={editingLink}
-          onSaved={() => {
-            setEditingLink(null);
-            setActiveSection("links");
-            setScreen("shell");
-          }}
-          onCancel={() => {
-            setEditingLink(null);
-            setScreen("shell");
-          }}
-        />
-        {engineToast}
-      </>
-    );
-  }
-
   return (
     <div className="app-shell">
-      <Sidebar active={activeSection} onNavigate={setActiveSection} />
+      <Sidebar
+        active={activeSection}
+        onNavigate={(section) => {
+          // Navigating to Create directly from the sidebar (rather than via
+          // "Edit" on a specific link, or "Create" on a suggestion) should
+          // always start a fresh, empty chain — not resume whatever was
+          // left over from a previous visit.
+          if (section === "create") {
+            goToFreshCreate();
+          } else {
+            setActiveSection(section);
+          }
+        }}
+      />
       <div className="app-shell-content">
+        {activeSection === "create" && (
+          <CreateLinkPage
+            editingLink={editingLink ?? undefined}
+            initialTracks={prefillTracks ?? undefined}
+            onSaved={returnToLinksAfterEditor}
+            onCancel={returnToLinksAfterEditor}
+          />
+        )}
+
         {activeSection === "links" && (
           <LinksPage
-            onCreateLink={() => setScreen("create")}
-            onEditLink={(link) => {
-              setEditingLink(link);
-              setScreen("edit");
-            }}
+            onCreateLink={goToFreshCreate}
+            onEditLink={goToEdit}
             onOpenDiscover={() => setActiveSection("discover")}
           />
         )}
 
         {activeSection === "discover" && (
-          <DiscoverPage
-            onCreateFromSuggestion={(tracks) => {
-              setPrefillTracks(tracks);
-              setScreen("create");
-            }}
-          />
+          <DiscoverPage onCreateFromSuggestion={goToCreateFromSuggestion} />
         )}
 
         {activeSection === "settings" && (

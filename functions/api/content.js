@@ -7,7 +7,7 @@ const CONTENT_KEY = "site-content";
 
 const DEFAULT_CONTENT = {
   heroSubtext:
-    "Links keeps multi-part tracks and sequences you choose playing in order — even when Spotify is on shuffle.",
+    "Links keeps multi-part tracks and sequences you choose playing in order, even when Spotify is on shuffle.",
   tracks: [
     { title: "Pain Remains I: Dancing Like Flames", artist: "Lorna Shore", coverUrl: "" },
     { title: "Pain Remains II: After All I've Done, I'll Disappear", artist: "Lorna Shore", coverUrl: "" }

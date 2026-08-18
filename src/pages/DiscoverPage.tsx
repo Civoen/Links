@@ -10,7 +10,7 @@ type Step = "pickPlaylist" | "scanning" | "results";
 
 function suggestionTitle(suggestion: SuggestedLink): string {
   const first = suggestion.tracks[0];
-  return first.album ? `${first.artist} — ${first.album}` : first.artist;
+  return first.album ? `${first.artist} · ${first.album}` : first.artist;
 }
 
 export default function DiscoverPage({
@@ -51,8 +51,8 @@ export default function DiscoverPage({
         <>
           <p className="muted">
             Pick a playlist. Links looks for tracks from the same album, in
-            a row, that are all sitting in it — the kind of thing that's
-            usually meant to play together.
+            a row, that are all sitting in it. That's usually the kind of
+            thing that's meant to play together.
           </p>
 
           {error && <p className="error-text">{error}</p>}

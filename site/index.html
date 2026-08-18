@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Links — keep tracks together, even on shuffle</title>
+  <title>Links: keep tracks together, even on shuffle</title>
   <link rel="icon" href="assets/favicon.png" />
   <style>
     :root {
@@ -169,8 +169,8 @@
     </a>
     <div class="nav-links">
       <a href="#how-it-works">How it works</a>
-      <a href="#features">Features</a>
       <a href="#app">App</a>
+      <a href="#features">Features</a>
       <a href="#faq">FAQ</a>
     </div>
     <div class="nav-right">
@@ -190,7 +190,7 @@
     <div>
       <div class="eyebrow"><span class="eyebrow-dot"></span>Unofficial Spotify companion app</div>
       <h1 class="hero-title">Shuffle,<br />without the <span class="accent-text">chaos.</span></h1>
-      <p class="hero-lede" id="hero-subtext">Links keeps multi-part tracks and sequences you choose playing in order — even when Spotify is on shuffle.</p>
+      <p class="hero-lede" id="hero-subtext">Links keeps multi-part tracks and sequences you choose playing in order, even when Spotify is on shuffle.</p>
       <div class="downloads">
         <a class="btn btn-primary" href="https://github.com/Civoen/Links/releases/latest/download/Links-Setup.exe">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M3 3h8v8H3V3zm10 0h8v8h-8V3zM3 13h8v8H3v-8zm10 0h8v8h-8v-8z"/></svg>
@@ -214,8 +214,10 @@
         </div>
         <div class="compare-track"><span class="dot-num"><span data-track="1" data-field="cover-slot" data-size="20"></span></span><div class="compare-track-text"><span class="t" data-track="1" data-field="title"></span></div></div>
         <div class="compare-track faded"><span class="dot-num"><div style="width:20px;height:20px;border-radius:5px;background:#3a3a3a"></div></span><div class="compare-track-text"><span class="t">Other Song</span></div></div>
+        <div class="compare-track faded"><span class="dot-num"><div style="width:20px;height:20px;border-radius:5px;background:#2f4a3a"></div></span><div class="compare-track-text"><span class="t">Other Song</span></div></div>
         <div class="compare-track"><span class="dot-num"><span data-track="0" data-field="cover-slot" data-size="20"></span></span><div class="compare-track-text"><span class="t" data-track="0" data-field="title"></span></div></div>
         <div class="compare-track faded"><span class="dot-num"><div style="width:20px;height:20px;border-radius:5px;background:#4a4a4a"></div></span><div class="compare-track-text"><span class="t">Other Song</span></div></div>
+        <div class="compare-track faded"><span class="dot-num"><div style="width:20px;height:20px;border-radius:5px;background:#3a2f4a"></div></span><div class="compare-track-text"><span class="t">Other Song</span></div></div>
       </div>
 
       <div class="compare-arrow">
@@ -233,9 +235,13 @@
           <div class="compare-track"><span class="dot-num"><span data-track="0" data-field="cover-slot" data-size="20"></span></span><div class="compare-track-text"><span class="t" data-track="0" data-field="title"></span><span class="a" data-track="0" data-field="artist"></span></div></div>
           <div class="compare-track"><span class="dot-num"><span data-track="1" data-field="cover-slot" data-size="20"></span></span><div class="compare-track-text"><span class="t" data-track="1" data-field="title"></span><span class="a" data-track="1" data-field="artist"></span></div></div>
         </div>
+        <div class="compare-track faded"><span class="dot-num"><div style="width:20px;height:20px;border-radius:5px;background:#3a3a3a"></div></span><div class="compare-track-text"><span class="t">Other Song</span></div></div>
+        <div class="compare-track faded"><span class="dot-num"><div style="width:20px;height:20px;border-radius:5px;background:#2f4a3a"></div></span><div class="compare-track-text"><span class="t">Other Song</span></div></div>
+        <div class="compare-track faded"><span class="dot-num"><div style="width:20px;height:20px;border-radius:5px;background:#4a4a4a"></div></span><div class="compare-track-text"><span class="t">Other Song</span></div></div>
+        <div class="compare-track faded"><span class="dot-num"><div style="width:20px;height:20px;border-radius:5px;background:#3a2f4a"></div></span><div class="compare-track-text"><span class="t">Other Song</span></div></div>
         <div class="compare-status">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
-          Shuffle stays on
+          Shuffle stays on for everything else
         </div>
       </div>
     </div>
@@ -269,34 +275,6 @@
         <div class="step-num">03</div>
         <h3>Links takes care of the rest</h3>
         <p>When shuffle tries to break apart a linked sequence, Links quietly adds the next track to your queue. Shuffle stays on. No interruptions.</p>
-      </div>
-    </div>
-  </div>
-</section>
-
-<section id="features">
-  <div class="wrap">
-    <h2 class="section-title">Designed to stay out of your way</h2>
-    <div class="feature-strip">
-      <div>
-        <div class="feature-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1DB954" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"/></svg></div>
-        <h3>Never interrupts playback</h3>
-        <p>No skipping. No removing songs. No fighting Spotify.</p>
-      </div>
-      <div>
-        <div class="feature-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1DB954" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg></div>
-        <h3>Runs quietly in the background</h3>
-        <p>Start Links once and forget about it.</p>
-      </div>
-      <div>
-        <div class="feature-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1DB954" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 3h5v5M4 20L21 3M21 16v5h-5M15 15l6 6M4 4l5 5"/></svg></div>
-        <h3>Shuffle stays on</h3>
-        <p>You don't have to choose between shuffle and listening properly.</p>
-      </div>
-      <div>
-        <div class="feature-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1DB954" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v2M12 19v2M5 5l1.5 1.5M17.5 17.5L19 19M3 12h2M19 12h2M5 19l1.5-1.5M17.5 6.5L19 5"/><circle cx="12" cy="12" r="3"/></svg></div>
-        <h3>Smart suggestions</h3>
-        <p>Links can scan playlists and suggest tracks that look like they belong together.</p>
       </div>
     </div>
   </div>
@@ -367,6 +345,34 @@
   </div>
 </section>
 
+<section id="features">
+  <div class="wrap">
+    <h2 class="section-title">Designed to stay out of your way</h2>
+    <div class="feature-strip">
+      <div>
+        <div class="feature-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1DB954" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 18v-6a9 9 0 0 1 18 0v6"/><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"/></svg></div>
+        <h3>Never interrupts playback</h3>
+        <p>No skipping. No removing songs. No fighting Spotify.</p>
+      </div>
+      <div>
+        <div class="feature-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1DB954" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg></div>
+        <h3>Runs quietly in the background</h3>
+        <p>Start Links once and forget about it.</p>
+      </div>
+      <div>
+        <div class="feature-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1DB954" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 3h5v5M4 20L21 3M21 16v5h-5M15 15l6 6M4 4l5 5"/></svg></div>
+        <h3>Shuffle stays on</h3>
+        <p>You don't have to choose between shuffle and listening properly.</p>
+      </div>
+      <div>
+        <div class="feature-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1DB954" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v2M12 19v2M5 5l1.5 1.5M17.5 17.5L19 19M3 12h2M19 12h2M5 19l1.5-1.5M17.5 6.5L19 5"/><circle cx="12" cy="12" r="3"/></svg></div>
+        <h3>Smart suggestions</h3>
+        <p>Links can scan playlists and suggest tracks that look like they belong together.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
 <section>
   <div class="wrap">
     <h2 class="section-title">Simple to install</h2>
@@ -379,7 +385,7 @@
         <p>Windows may show a caution screen because Links is distributed by an independent publisher, not signed by a large registered one. It's normal, and you only see it once.</p>
         <details>
           <summary>View installation guide</summary>
-          <div class="step-detail">Click <strong>More info</strong> on the blue screen, then <strong>Run anyway</strong>. That's it — Links opens normally from then on.</div>
+          <div class="step-detail">Click <strong>More info</strong> on the blue screen, then <strong>Run anyway</strong>. That's it. Links opens normally from then on.</div>
         </details>
       </div>
       <div class="install-card">
@@ -387,7 +393,7 @@
           <div class="install-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="#1DB954"><circle cx="12" cy="8" r="4"/><path d="M8 12c-1.5 2-2 5-1 8h10c1-3 .5-6-1-8"/></svg></div>
           <h3>Linux</h3>
         </div>
-        <p>Download the AppImage and allow it to run — that's a one-time step every AppImage needs, not specific to Links.</p>
+        <p>Download the AppImage and allow it to run. That's a one-time step every AppImage needs, not specific to Links.</p>
         <details>
           <summary>View installation guide</summary>
           <div class="step-detail">Right-click the file → Properties → Permissions → allow executing, or from a terminal: <code>chmod +x Links-*.AppImage</code>. Then run it directly.</div>
@@ -403,7 +409,7 @@
     <div class="faq-list">
       <details class="faq-item">
         <summary>Do I need Spotify Premium?</summary>
-        <p>Yes. The playback controls Links relies on only work with a Premium account — that's a Spotify limitation, not something Links can work around.</p>
+        <p>Yes. The playback controls Links relies on only work with a Premium account. That's a Spotify limitation, not something Links can work around.</p>
       </details>
       <details class="faq-item">
         <summary>Is Links official, or affiliated with Spotify?</summary>
@@ -411,15 +417,15 @@
       </details>
       <details class="faq-item">
         <summary>Why does my OS show a warning when I install it?</summary>
-        <p>Links is signed by an independent publisher rather than a large registered one, so Windows and Linux both flag it the first time — a one-time step, not a sign anything's wrong. See the install guides above for exact steps.</p>
+        <p>Links is signed by an independent publisher rather than a large registered one, so Windows and Linux both flag it the first time, a one-time step, not a sign anything's wrong. See the install guides above for exact steps.</p>
       </details>
       <details class="faq-item">
         <summary>Does Links work on macOS?</summary>
-        <p>Not currently. Apple's code-signing requirements mean an unsigned Mac app doesn't just get a warning — it gets removed automatically. Support may return if that becomes affordable to set up.</p>
+        <p>Not currently. Apple's code-signing requirements mean an unsigned Mac app doesn't just get a warning. It gets removed automatically. Support may return if that becomes affordable to set up.</p>
       </details>
       <details class="faq-item">
         <summary>Is it free?</summary>
-        <p>Yes — free and open source. The code is public on GitHub.</p>
+        <p>Yes, free and open source. The code is public on GitHub.</p>
       </details>
     </div>
   </div>
@@ -453,8 +459,8 @@
       <div class="footer-col">
         <h4>Product</h4>
         <a href="#how-it-works">How it works</a>
-        <a href="#features">Features</a>
         <a href="#app">App</a>
+        <a href="#features">Features</a>
         <a href="#faq">FAQ</a>
       </div>
       <div class="footer-col">
@@ -474,7 +480,7 @@
 
   const DEFAULTS = {
     heroHeadline: "Shuffle, without the chaos.",
-    heroSubtext: "Links keeps multi-part tracks and sequences you choose playing in order — even when Spotify is on shuffle.",
+    heroSubtext: "Links keeps multi-part tracks and sequences you choose playing in order, even when Spotify is on shuffle.",
     tracks: [
       { title: "Pain Remains I: Dancing Like Flames", artist: "Lorna Shore", coverUrl: "" },
       { title: "Pain Remains II: After All I've Done, I'll Disappear", artist: "Lorna Shore", coverUrl: "" }

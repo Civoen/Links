@@ -28,15 +28,38 @@ const linksAPI = {
   setClientId: (clientId: string): Promise<void> =>
     ipcRenderer.invoke("settings:setClientId", clientId),
 
+  getMinimizeToTray: (): Promise<boolean> => ipcRenderer.invoke("settings:getMinimizeToTray"),
+  setMinimizeToTray: (value: boolean): Promise<void> =>
+    ipcRenderer.invoke("settings:setMinimizeToTray", value),
+
+  getShowEngineNotifications: (): Promise<boolean> =>
+    ipcRenderer.invoke("settings:getShowEngineNotifications"),
+  setShowEngineNotifications: (value: boolean): Promise<void> =>
+    ipcRenderer.invoke("settings:setShowEngineNotifications", value),
+
+  getLaunchAtLogin: (): Promise<boolean> => ipcRenderer.invoke("settings:getLaunchAtLogin"),
+  setLaunchAtLogin: (value: boolean): Promise<void> =>
+    ipcRenderer.invoke("settings:setLaunchAtLogin", value),
+
   searchTracks: (query: string): Promise<TrackSummary[]> =>
     ipcRenderer.invoke("tracks:search", query),
 
   getLinks: (): Promise<Link[]> => ipcRenderer.invoke("links:get"),
-  saveLink: (tracks: TrackSummary[]): Promise<Link> =>
-    ipcRenderer.invoke("links:save", tracks),
-  updateLink: (id: string, tracks: TrackSummary[]): Promise<void> =>
-    ipcRenderer.invoke("links:update", id, tracks),
+  saveLink: (tracks: TrackSummary[], title?: string): Promise<Link> =>
+    ipcRenderer.invoke("links:save", tracks, title),
+  updateLink: (id: string, tracks: TrackSummary[], title?: string): Promise<void> =>
+    ipcRenderer.invoke("links:update", id, tracks, title),
+  setLinkActive: (id: string, active: boolean): Promise<void> =>
+    ipcRenderer.invoke("links:setActive", id, active),
   deleteLink: (id: string): Promise<void> => ipcRenderer.invoke("links:delete", id),
+  clearAllLinks: (): Promise<void> => ipcRenderer.invoke("links:clearAll"),
+  reorderLinks: (orderedIds: string[]): Promise<void> =>
+    ipcRenderer.invoke("links:reorder", orderedIds),
+  findDuplicateLink: (tracks: TrackSummary[], excludeId?: string): Promise<Link | null> =>
+    ipcRenderer.invoke("links:findDuplicate", tracks, excludeId),
+  getBrokenTrackUris: (): Promise<string[]> => ipcRenderer.invoke("links:getBrokenTrackUris"),
+  exportLinks: (): Promise<{ ok: boolean; filePath?: string }> =>
+    ipcRenderer.invoke("links:export"),
 
   getPlaylists: (): Promise<PlaylistSummary[]> => ipcRenderer.invoke("playlists:list"),
   getSuggestions: (playlistId: string): Promise<SuggestedLink[]> =>

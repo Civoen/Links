@@ -43,6 +43,7 @@ async function tick() {
 async function handleForwardChaining(currentTrackUri: string) {
   const match = findLinkByTrackUri(currentTrackUri);
   if (!match) return;
+  if (!match.link.active) return;
 
   const { link, index } = match;
   const isLastInChain = index === link.tracks.length - 1;
@@ -61,6 +62,7 @@ async function handleOutOfOrderCorrection(currentTrackUri: string) {
   if (queueUris.length === 0) return;
 
   for (const link of links) {
+    if (!link.active) continue;
     for (let i = 1; i < link.tracks.length; i++) {
       const predecessor = link.tracks[i - 1];
       const successor = link.tracks[i];

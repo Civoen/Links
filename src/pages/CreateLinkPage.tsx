@@ -23,11 +23,13 @@ export default function CreateLinkPage({
   onCancel: () => void;
 }) {
   const [tracks, setTracks] = useState<TrackSummary[]>(editingLink?.tracks ?? initialTracks ?? []);
+  const [titleInput, setTitleInput] = useState(editingLink?.title ?? "");
   const [insertAt, setInsertAt] = useState<number | null>(null);
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [duplicateWarning, setDuplicateWarning] = useState<Link | null>(null);
 
   function openSearchAt(index: number) {
     setError(null);
@@ -42,10 +44,12 @@ export default function CreateLinkPage({
       return next;
     });
     setInsertAt(null);
+    setDuplicateWarning(null);
   }
 
   function handleRemove(index: number) {
     setTracks((current) => current.filter((_, i) => i !== index));
+    setDuplicateWarning(null);
   }
 
   function handleDrop(targetIndex: number) {
@@ -62,21 +66,16 @@ export default function CreateLinkPage({
     });
     setDraggedIndex(null);
     setDragOverIndex(null);
+    setDuplicateWarning(null);
   }
 
-  async function handleSave() {
-    if (tracks.length < 2) {
-      setError("Add at least two tracks to create a link.");
-      return;
-    }
-
-    setError(null);
+  async function performSave() {
     setSaving(true);
     try {
       if (editingLink) {
-        await window.linksAPI.updateLink(editingLink.id, tracks);
+        await window.linksAPI.updateLink(editingLink.id, tracks, titleInput);
       } else {
-        await window.linksAPI.saveLink(tracks);
+        await window.linksAPI.saveLink(tracks, titleInput);
       }
       onSaved();
     } catch (err) {
@@ -86,12 +85,33 @@ export default function CreateLinkPage({
     }
   }
 
-  const title = editingLink ? "Edit link" : "Create a link";
+  async function handleSave() {
+    if (tracks.length < 2) {
+      setError("Add at least two tracks to create a link.");
+      return;
+    }
+    setError(null);
+
+    const duplicate = await window.linksAPI.findDuplicateLink(tracks, editingLink?.id);
+    if (duplicate) {
+      setDuplicateWarning(duplicate);
+      return;
+    }
+
+    await performSave();
+  }
+
+  async function handleSaveAnyway() {
+    setDuplicateWarning(null);
+    await performSave();
+  }
+
+  const pageTitle = editingLink ? "Edit link" : "Create a link";
 
   if (insertAt !== null) {
     return (
       <div className="screen screen-narrow">
-        <h1 className="page-title">{title}</h1>
+        <h1 className="page-title">{pageTitle}</h1>
         <TrackSearch onPick={handlePick} onClose={() => setInsertAt(null)} />
       </div>
     );
@@ -99,10 +119,21 @@ export default function CreateLinkPage({
 
   return (
     <div className="screen screen-narrow">
-      <h1 className="page-title">{title}</h1>
+      <h1 className="page-title">{pageTitle}</h1>
       <p className="muted">
         Search for tracks, drag to reorder, and add more anywhere in the chain.
       </p>
+
+      <label className="field-label" htmlFor="link-title-input">
+        Title (optional)
+      </label>
+      <input
+        id="link-title-input"
+        className="search-input link-title-input"
+        placeholder="Leave blank to name it automatically"
+        value={titleInput}
+        onChange={(e) => setTitleInput(e.target.value)}
+      />
 
       <div className="chain-builder">
         {tracks.length === 0 ? (
@@ -168,16 +199,36 @@ export default function CreateLinkPage({
         ))}
       </div>
 
+      {duplicateWarning && (
+        <div className="duplicate-warning">
+          <p className="duplicate-warning-title">You already have this link</p>
+          <p className="duplicate-warning-text">
+            "{duplicateWarning.title || duplicateWarning.tracks[0].name}" has the exact same
+            tracks in the same order. Save anyway if this is intentional.
+          </p>
+          <div className="button-row" style={{ marginTop: 10 }}>
+            <button className="btn" onClick={() => setDuplicateWarning(null)}>
+              Cancel
+            </button>
+            <button className="btn btn-primary" onClick={handleSaveAnyway} disabled={saving}>
+              {saving ? "Saving…" : "Save anyway"}
+            </button>
+          </div>
+        </div>
+      )}
+
       {error && <p className="error-text">{error}</p>}
 
-      <div className="button-row">
-        <button className="btn" onClick={onCancel}>
-          Cancel
-        </button>
-        <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
-          {saving ? "Saving…" : "Save link"}
-        </button>
-      </div>
+      {!duplicateWarning && (
+        <div className="button-row">
+          <button className="btn" onClick={onCancel}>
+            Cancel
+          </button>
+          <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
+            {saving ? "Saving…" : "Save link"}
+          </button>
+        </div>
+      )}
     </div>
   );
 }

@@ -58,7 +58,7 @@ export default function ConnectPage({ onConnected }: { onConnected: () => void }
           <h1 className="connect-title">Set up your own Spotify app</h1>
           <p className="connect-body">
             Spotify requires every app to connect through its own developer
-            registration, so Links asks you to create a free one — it takes
+            registration, so Links asks you to create a free one. It takes
             about a minute and it's just for you.
           </p>
 

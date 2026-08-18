@@ -58,8 +58,8 @@ export default function TrackSearch({
 
       {!loading && query.trim() && results.length > 0 && (
         <p className="search-hint">
-          Same title showing up more than once? Check the album name below — a
-          music video or alternate release often has its own separate entry.
+          Same title showing up more than once? Check the album name below.
+          A music video or alternate release often has its own separate entry.
         </p>
       )}
 
