@@ -58,6 +58,8 @@ const linksAPI = {
   findDuplicateLink: (tracks: TrackSummary[], excludeId?: string): Promise<Link | null> =>
     ipcRenderer.invoke("links:findDuplicate", tracks, excludeId),
   getBrokenTrackUris: (): Promise<string[]> => ipcRenderer.invoke("links:getBrokenTrackUris"),
+  recheckBrokenTrackUris: (): Promise<string[]> =>
+    ipcRenderer.invoke("links:recheckBrokenTrackUris"),
   exportLinks: (): Promise<{ ok: boolean; filePath?: string }> =>
     ipcRenderer.invoke("links:export"),
 

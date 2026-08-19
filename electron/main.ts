@@ -196,6 +196,10 @@ function registerIpcHandlers() {
   );
 
   ipcMain.handle("links:getBrokenTrackUris", () => [...brokenTrackUris]);
+  ipcMain.handle("links:recheckBrokenTrackUris", async () => {
+    brokenTrackUris = await findBrokenTrackUris();
+    return [...brokenTrackUris];
+  });
 
   ipcMain.handle("links:export", async () => {
     if (!mainWindow) return { ok: false };
@@ -233,9 +237,9 @@ async function backfillMissingAlbumArt() {
     const missingUris = findTracksMissingArt();
     if (missingUris.length === 0) return;
 
-    const fetched = await getTracksByUri(missingUris);
+    const { found } = await getTracksByUri(missingUris);
     const metadataByUri = new Map(
-      fetched.map((t) => [t.uri, { album: t.album, albumArt: t.albumArt, durationMs: t.durationMs }])
+      found.map((t) => [t.uri, { album: t.album, albumArt: t.albumArt, durationMs: t.durationMs }])
     );
 
     backfillTrackMetadata(metadataByUri);
@@ -267,8 +271,11 @@ app.whenReady().then(() => {
 
   if (isConnected()) {
     startLinkEngine(notifyRendererOfEngineAction);
-    backfillMissingAlbumArt();
-    checkForBrokenLinks();
+    // Sequenced, not fired together — both of these batch-fetch tracks
+    // from Spotify, and running them at the same moment right after
+    // startup was exactly what made the broken-link check prone to
+    // hitting rate limits and false-flagging playable tracks.
+    backfillMissingAlbumArt().then(() => checkForBrokenLinks());
   }
 
   if (process.env.NODE_ENV !== "development") {

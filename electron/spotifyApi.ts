@@ -123,24 +123,51 @@ export async function getQueue(): Promise<string[]> {
  * limit). Used to backfill album art/duration for links saved before
  * those fields were tracked — not needed for normal search/playback flow.
  */
-export async function getTracksByUri(uris: string[]): Promise<TrackSummary[]> {
-  if (uris.length === 0) return [];
+export interface TrackLookupResult {
+  found: TrackSummary[];
+  // IDs whose batch request failed even after a retry — genuinely unknown
+  // status, NOT the same as "confirmed missing". Callers must not treat
+  // these as broken/removed tracks.
+  inconclusiveIds: string[];
+}
 
-  const ids = uris.map((uri) => uri.split(":").pop()).filter(Boolean);
-  const results: TrackSummary[] = [];
+async function fetchTrackBatch(batch: string[]): Promise<Response> {
+  const res = await spotifyFetch(`/tracks?ids=${batch.join(",")}`);
+  if (res.ok) return res;
+
+  // One retry — covers the common transient case (a momentary rate limit
+  // or network blip) rather than immediately giving up on an entire batch
+  // of up to 50 tracks.
+  await new Promise((resolve) => setTimeout(resolve, 500));
+  return spotifyFetch(`/tracks?ids=${batch.join(",")}`);
+}
+
+export async function getTracksByUri(uris: string[]): Promise<TrackLookupResult> {
+  if (uris.length === 0) return { found: [], inconclusiveIds: [] };
+
+  const ids = uris.map((uri) => uri.split(":").pop()).filter(Boolean) as string[];
+  const found: TrackSummary[] = [];
+  const inconclusiveIds: string[] = [];
 
   for (let i = 0; i < ids.length; i += 50) {
     const batch = ids.slice(i, i + 50);
-    const res = await spotifyFetch(`/tracks?ids=${batch.join(",")}`);
-    if (!res.ok) continue;
+    const res = await fetchTrackBatch(batch);
+
+    if (!res.ok) {
+      // Still failing after the retry — we genuinely don't know the
+      // status of these tracks. Record them as inconclusive rather than
+      // silently dropping them, so callers can avoid flagging them broken.
+      inconclusiveIds.push(...batch);
+      continue;
+    }
 
     const json = await res.json();
     for (const t of json.tracks ?? []) {
-      if (t) results.push(trackFromApi(t));
+      if (t) found.push(trackFromApi(t));
     }
   }
 
-  return results;
+  return { found, inconclusiveIds };
 }
 
 /** The current user's playlists (owned or followed), one page of up to 50. */

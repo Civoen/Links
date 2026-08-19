@@ -72,6 +72,10 @@ export default function LinksPage({
     window.linksAPI.getLinks().then(setLinks);
   }
 
+  function handleRecheckBroken() {
+    window.linksAPI.recheckBrokenTrackUris().then((uris) => setBrokenUris(new Set(uris)));
+  }
+
   async function handleToggleActive(link: Link) {
     const next = !link.active;
     setLinks((current) =>
@@ -172,7 +176,10 @@ export default function LinksPage({
           </button>
           <OverflowMenu
             ariaLabel="More actions"
-            items={[{ label: "Scan a playlist for suggested links", onClick: onOpenDiscover }]}
+            items={[
+              { label: "Scan a playlist for suggested links", onClick: onOpenDiscover },
+              { label: "Recheck for broken links", onClick: handleRecheckBroken }
+            ]}
           />
         </div>
       </div>
