@@ -173,7 +173,15 @@ export async function getTracksByUri(uris: string[]): Promise<TrackLookupResult>
 /** The current user's playlists (owned or followed), one page of up to 50. */
 export async function getUserPlaylists(): Promise<PlaylistSummary[]> {
   const res = await spotifyFetch("/me/playlists?limit=50");
-  if (!res.ok) return [];
+
+  if (!res.ok) {
+    if (res.status === 401 || res.status === 403) {
+      throw new Error(
+        "Links doesn't have permission to see your playlists yet. Go to Settings, disconnect, then reconnect Spotify to grant it."
+      );
+    }
+    throw new Error(`Spotify couldn't load your playlists right now (error ${res.status}). Try again in a moment.`);
+  }
 
   const json = await res.json();
   return json.items.map((p: any) => ({
@@ -185,17 +193,27 @@ export async function getUserPlaylists(): Promise<PlaylistSummary[]> {
 
 /** Every track in a playlist, following pagination for playlists over 100 tracks. */
 export async function getPlaylistTracks(playlistId: string): Promise<TrackSummary[]> {
-  const fields = "next,items(track(uri,name,artists,album(name,uri,images),duration_ms,track_number))";
-  let url: string | null = `https://api.spotify.com/v1/playlists/${playlistId}/tracks?limit=100&fields=${encodeURIComponent(fields)}`;
+  // Spotify's February 2026 API migration renamed this endpoint from
+  // /tracks to /items, and the response field itself from tracks/track to
+  // items/item — confirmed against Spotify's current migration guide, not
+  // assumed. The old /tracks endpoint now returns 403 for every
+  // Development Mode app (which every Links installation is, since each
+  // user brings their own Client ID), so this wasn't a per-user bug —
+  // every playlist scan since that migration landed was silently
+  // returning nothing.
+  const fields = "next,items(item(uri,name,artists,album(name,uri,images),duration_ms,track_number))";
+  let url: string | null = `https://api.spotify.com/v1/playlists/${playlistId}/items?limit=100&fields=${encodeURIComponent(fields)}`;
   const results: TrackSummary[] = [];
 
   while (url) {
     const res = await spotifyFetchFullUrl(url);
-    if (!res.ok) break;
+    if (!res.ok) {
+      throw new Error(`Spotify couldn't load this playlist's tracks (error ${res.status}).`);
+    }
 
     const json = await res.json();
-    for (const item of json.items ?? []) {
-      if (item?.track) results.push(trackFromApi(item.track));
+    for (const entry of json.items ?? []) {
+      if (entry?.item) results.push(trackFromApi(entry.item));
     }
 
     url = json.next ?? null;

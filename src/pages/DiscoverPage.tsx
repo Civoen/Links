@@ -25,7 +25,14 @@ export default function DiscoverPage({
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    window.linksAPI.getPlaylists().then(setPlaylists);
+    window.linksAPI
+      .getPlaylists()
+      .then(setPlaylists)
+      .catch((err) => {
+        console.error(err);
+        setError(err instanceof Error ? err.message : "Couldn't load your playlists.");
+        setPlaylists([]);
+      });
   }, []);
 
   async function scanPlaylist(playlist: PlaylistSummary) {
@@ -38,7 +45,7 @@ export default function DiscoverPage({
       setStep("results");
     } catch (err) {
       console.error(err);
-      setError("Couldn't scan that playlist. Try again.");
+      setError(err instanceof Error ? err.message : "Couldn't scan that playlist. Try again.");
       setStep("pickPlaylist");
     }
   }
@@ -59,7 +66,7 @@ export default function DiscoverPage({
 
           {playlists === null && <p className="muted">Loading your playlists…</p>}
 
-          {playlists !== null && playlists.length === 0 && (
+          {playlists !== null && playlists.length === 0 && !error && (
             <p className="muted">No playlists found on your account.</p>
           )}
 
