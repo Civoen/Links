@@ -3,15 +3,16 @@ import { findLinkByTrackUri, getLinks } from "./linkStore";
 import { POLL_INTERVAL_MS } from "./config";
 
 // Design rules this engine follows:
-// 1. Forward-only chaining: whatever track is currently playing, if it's
-//    part of a link and isn't the last track in it, queue the next one.
+// 1. Forward chaining: whatever track is currently playing, if it's part
+//    of a link, queue every remaining track in that link right away — not
+//    just the immediate next one. See "Round 3" below for why.
 // 2. Out-of-order correction (best-effort): if a later track in a chain is
 //    sitting in the upcoming queue before its predecessor has played,
 //    Links queues the predecessor so it plays first.
 // 3. Never hijack playback: only ever add a track to "up next".
 // 4. Idempotent: only act once per situation, not once per tick.
 //
-// Two rounds of real-world bug reports shaped this file:
+// Three rounds of real-world bug reports shaped this file:
 //
 // Round 1 (duplicate adds): neither Spotify's playback-state nor its
 // queue-read endpoint are fully reliable single-poll signals. Every
@@ -25,10 +26,37 @@ import { POLL_INTERVAL_MS } from "./config";
 // track was already marked handled — so the engine silently gave up and
 // never retried it. Every "mark as handled" step below now happens only
 // after the corresponding action has actually completed.
+//
+// Round 3 (chain broken by a manual queue addition): with a 3+ track
+// chain, queuing only one step ahead left a real gap — if someone
+// manually added a track to their queue while an early chain member was
+// playing, it could land ahead of a later chain member that Links hadn't
+// queued yet, since Links was still waiting for that member's own
+// predecessor to start playing first. Queuing the whole remaining chain
+// the moment the first track starts closes that gap, at the cost of
+// committing to the rest of the chain earlier than strictly necessary.
+
+// Round 4 (a track re-added after already being played): correction had
+// no memory of what had already played in this session. If a predecessor
+// legitimately played earlier and the listener simply moved on (by
+// skipping, or because Spotify's shuffle context served something else
+// next instead of the queued successor), correction saw "successor is
+// upcoming, predecessor isn't here right now" and concluded the link had
+// been broken — re-queuing a track that had already had its turn. Worse,
+// that re-add then made the *next* pair back look broken too, cascading
+// backward through the whole chain. Correction now tracks the furthest
+// position reached in each link and never tries to "fix" a pair whose
+// predecessor position has already been reached.
 
 let pollHandle: ReturnType<typeof setInterval> | null = null;
 let lastActionedTrackUri: string | null = null;
 const handledCorrections = new Set<string>();
+
+// The highest track index reached in each link during this run of the
+// app — not persisted, and (deliberately, for simplicity) never reset
+// mid-session, so replaying a link from the start later in the same
+// session won't re-enable correction for positions already passed once.
+const furthestIndexReached = new Map<string, number>();
 
 const STOPPED_CONFIRMATION_TICKS = 2;
 let consecutiveNotPlayingTicks = 0;
@@ -79,19 +107,38 @@ async function tick() {
 async function handleForwardChaining(currentTrackUri: string) {
   const match = findLinkByTrackUri(currentTrackUri);
   if (!match) return;
-  if (!match.link.active) return;
 
   const { link, index } = match;
-  const isLastInChain = index === link.tracks.length - 1;
-  if (isLastInChain) return;
 
-  const next = link.tracks[index + 1];
+  const previousFurthest = furthestIndexReached.get(link.id) ?? -1;
+  furthestIndexReached.set(link.id, Math.max(previousFurthest, index));
 
+  if (!match.link.active) return;
+
+  const remaining = link.tracks.slice(index + 1);
+  if (remaining.length === 0) return; // last track in the chain — nothing left to queue
+
+  // Queue every remaining track in this chain now, not just the next one.
+  // Queuing one-at-a-time (only adding the next track once its predecessor
+  // starts playing) left a real gap: if someone manually added a track to
+  // the queue while an earlier chain member was still playing, it could
+  // land ahead of a later chain member that hadn't been queued yet,
+  // breaking up the chain. Committing the whole remaining sequence up
+  // front closes that gap.
   const queueUris = await getQueue();
-  if (queueUris.includes(next.uri)) return;
+  const queuedNames: string[] = [];
 
-  await addToQueue(next.uri);
-  onAction?.(`Queued "${next.name}" next`);
+  for (const track of remaining) {
+    if (queueUris.includes(track.uri)) continue; // already there
+    await addToQueue(track.uri);
+    queuedNames.push(track.name);
+  }
+
+  if (queuedNames.length === 1) {
+    onAction?.(`Queued "${queuedNames[0]}" next`);
+  } else if (queuedNames.length > 1) {
+    onAction?.(`Queued ${queuedNames.length} tracks: ${queuedNames.join(", ")}`);
+  }
 }
 
 async function handleOutOfOrderCorrection(currentTrackUri: string) {
@@ -116,6 +163,15 @@ async function handleOutOfOrderCorrection(currentTrackUri: string) {
 
       const successorIsUpcoming = queueUris.includes(successor.uri);
       if (!successorIsUpcoming) continue;
+
+      // If this chain has already reached the predecessor's position at
+      // some point this session, it already had its turn — re-adding it
+      // now would be wrong regardless of whether it was fully played
+      // through or skipped past. This is the exact fix for a real bug:
+      // correction was re-inserting already-played tracks it had no way
+      // of knowing had already happened.
+      const predecessorIndex = i - 1;
+      if ((furthestIndexReached.get(link.id) ?? -1) >= predecessorIndex) continue;
 
       const predecessorAlreadyInPlace =
         predecessor.uri === currentTrackUri || queueUris.includes(predecessor.uri);
@@ -146,4 +202,5 @@ export function stopLinkEngine() {
   consecutiveNotPlayingTicks = 0;
   tickInProgress = false;
   handledCorrections.clear();
+  furthestIndexReached.clear();
 }

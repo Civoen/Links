@@ -1,5 +1,3 @@
-import logoUrl from "../assets/logo.png";
-
 export type SidebarSection = "create" | "links" | "discover" | "settings" | "about";
 
 const NAV_ITEMS: { key: SidebarSection; label: string; icon: JSX.Element }[] = [
@@ -63,11 +61,6 @@ export default function Sidebar({
 }) {
   return (
     <nav className="sidebar" aria-label="Main navigation">
-      <div className="sidebar-brand">
-        <img src={logoUrl} alt="" className="sidebar-brand-icon" />
-        <span className="sidebar-brand-name">Links</span>
-      </div>
-
       <div className="sidebar-nav">
         {NAV_ITEMS.map((item) => (
           <button

@@ -33,7 +33,7 @@
   "build": {
     "appId": "app.links.desktop",
     "productName": "Links",
-    "files": ["dist/**/*", "dist-electron/**/*"],
+    "files": ["dist/**/*", "dist-electron/**/*", "build/**/*"],
     "directories": { "output": "release" },
     "publish": {
       "provider": "github",

@@ -107,8 +107,15 @@ function createWindow() {
 }
 
 function createTray() {
-  const iconPath = path.join(__dirname, "../build/icon.png");
-  const trayIcon = nativeImage.createFromPath(iconPath).resize({ width: 16, height: 16 });
+  // Deliberately a separate asset from the app icon, not a resize of it.
+  // build/icon.png is fully opaque (a filled square), and downscaling
+  // that to 16px produced a nearly-black square that was invisible
+  // against a dark Windows taskbar while still being fully clickable —
+  // confirmed by checking the actual pixel alpha values, not a guess.
+  // This one is the brand glyph alone on a transparent background, so it
+  // reads clearly against both light and dark tray backgrounds.
+  const iconPath = path.join(__dirname, "../build/tray-icon.png");
+  const trayIcon = nativeImage.createFromPath(iconPath);
   tray = new Tray(trayIcon);
   tray.setToolTip("Links");
 
