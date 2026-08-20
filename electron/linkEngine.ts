@@ -47,9 +47,30 @@ export type NotificationLevel = "info" | "warning";
 // clean that up. It can at least say so clearly, once, rather than leave
 // it as an unexplained leftover.
 
+// Round 6 (silent total failure to queue anything): handleForwardChaining
+// used to ask Spotify's own queue-read whether a track was "already
+// there" before deciding to add it. That endpoint is documented — and
+// repeatedly confirmed in this project — as unreliable. A false positive
+// there (Spotify claiming a track was already queued when it genuinely
+// wasn't) caused the track to be silently skipped, with no error and no
+// success message either, since the code believed nothing needed doing.
+// If every remaining track in a chain hit this, the whole feature did
+// nothing and said nothing. Fixed by tracking Links' own successful adds
+// instead of trusting an external read to confirm them — the tradeoff is
+// an occasional harmless duplicate if shuffle independently places the
+// same track in the queue, which is far better than a track that's
+// silently never added at all.
+
 let pollHandle: ReturnType<typeof setInterval> | null = null;
 let lastActionedTrackUri: string | null = null;
 const handledCorrections = new Set<string>();
+
+// Track URIs Links has itself successfully added to the queue this
+// session. Cleared for a given track the moment it's observed actually
+// playing (see the top of handleForwardChaining) — once a track starts,
+// its "was it queued" bookkeeping is stale, and a future replay should
+// get a fresh check rather than being silently blocked by leftover state.
+const alreadyQueuedByUs = new Set<string>();
 
 // The highest track index reached in each link during this run of the
 // app — not persisted, and (deliberately, for simplicity) never reset
@@ -83,6 +104,25 @@ let tickInProgress = false;
 
 let onAction: ((message: string, level: NotificationLevel) => void) | null = null;
 
+/**
+ * Calls onAction defensively. onAction now does real work with real
+ * failure modes of its own (writing notification history to disk, IPC to
+ * the renderer) — none of that should ever be able to make a genuinely
+ * successful queue action look like it failed. Without this wrapper, an
+ * exception here would propagate up through handleForwardChaining (after
+ * addToQueue had already succeeded) and get caught by tick()'s outer
+ * catch block, which has no way to tell "the notification failed" apart
+ * from "the actual queueing failed" — so it would show a misleading
+ * "Spotify didn't respond" warning for something that worked fine.
+ */
+function safeNotify(message: string, level: NotificationLevel) {
+  try {
+    onAction?.(message, level);
+  } catch (err) {
+    console.error("[linkEngine] notification callback failed (core action still succeeded):", err);
+  }
+}
+
 async function tick() {
   if (tickInProgress) return;
   tickInProgress = true;
@@ -112,7 +152,7 @@ async function tick() {
         console.error("[linkEngine] forward chaining failed:", err);
         if (!forwardChainingFailing) {
           forwardChainingFailing = true;
-          onAction?.(
+          safeNotify(
             "Spotify didn't respond while Links tried to queue a linked track. Links will keep retrying automatically.",
             "warning"
           );
@@ -130,7 +170,7 @@ async function tick() {
       console.error("[linkEngine] correction failed:", err);
       if (!correctionFailing) {
         correctionFailing = true;
-        onAction?.(
+        safeNotify(
           "Spotify didn't respond while Links tried to fix a shuffled link order. Links will keep retrying automatically.",
           "warning"
         );
@@ -144,6 +184,12 @@ async function tick() {
 }
 
 async function handleForwardChaining(currentTrackUri: string) {
+  // This track is now actually playing — any earlier "we queued it"
+  // bookkeeping for it is done its job and is now stale. Clearing it
+  // means a future replay of this same track gets a fresh, correct check
+  // rather than being silently blocked by leftover state from last time.
+  alreadyQueuedByUs.delete(currentTrackUri);
+
   const match = findLinkByTrackUri(currentTrackUri);
   if (!match) return;
 
@@ -160,19 +206,22 @@ async function handleForwardChaining(currentTrackUri: string) {
   // Queue every remaining track in this chain now, not just the next one.
   // Queuing one-at-a-time left a real gap for 3+ track chains — see
   // "Round 3" above.
-  const queueUris = await getQueue();
   const queuedNames: string[] = [];
 
   for (const track of remaining) {
-    if (queueUris.includes(track.uri)) continue; // already there
+    // Skip only if WE ourselves already successfully queued this track —
+    // never based on asking Spotify's queue-read to confirm it. See
+    // "Round 6" above for why that was actively harmful.
+    if (alreadyQueuedByUs.has(track.uri)) continue;
     await addToQueue(track.uri);
+    alreadyQueuedByUs.add(track.uri);
     queuedNames.push(track.name);
   }
 
   if (queuedNames.length === 1) {
-    onAction?.(`Queued "${queuedNames[0]}" next`, "info");
+    safeNotify(`Queued "${queuedNames[0]}" next`, "info");
   } else if (queuedNames.length > 1) {
-    onAction?.(`Queued ${queuedNames.length} tracks: ${queuedNames.join(", ")}`, "info");
+    safeNotify(`Queued ${queuedNames.length} tracks: ${queuedNames.join(", ")}`, "info");
   }
 }
 
@@ -190,6 +239,18 @@ function checkForOrphanedLinks(currentTrackUri: string, queueUris: string[]) {
   for (const link of getLinks()) {
     if (!link.active) continue;
 
+    // A link that's never actually been played this session has nothing
+    // to be "orphaned" from — one of its tracks sitting in the queue is
+    // just coincidence (Spotify's own shuffle placed it there, or it's
+    // shared with a different link entirely), not evidence the listener
+    // started and abandoned this specific chain. Without this check, any
+    // saved link whose track happened to be anywhere in the queue would
+    // trigger a false warning, regardless of whether it was ever touched.
+    if ((furthestIndexReached.get(link.id) ?? -1) < 0) {
+      notifiedOrphans.delete(link.id);
+      continue;
+    }
+
     const isOnThisLinkNow = currentMatch?.link.id === link.id;
     const orphanedTracks = link.tracks.filter((t) => queueUris.includes(t.uri));
 
@@ -204,7 +265,7 @@ function checkForOrphanedLinks(currentTrackUri: string, queueUris: string[]) {
     const names = orphanedTracks.map((t) => t.name);
     const subject = names.length === 1 ? `"${names[0]}" is` : `${names.join(", ")} are`;
     const pronoun = names.length === 1 ? "it" : "them";
-    onAction?.(
+    safeNotify(
       `${subject} still queued from earlier. Spotify doesn't give apps a way to clear queued tracks, so you'll need to skip past ${pronoun} yourself.`,
       "warning"
     );
@@ -249,7 +310,7 @@ async function handleOutOfOrderCorrection(currentTrackUri: string, queueUris: st
       // "Round 2" above.
       await addToQueue(predecessor.uri);
       handledCorrections.add(correctionKey);
-      onAction?.(`Moved "${predecessor.name}" ahead of "${successor.name}"`, "info");
+      safeNotify(`Moved "${predecessor.name}" ahead of "${successor.name}"`, "info");
     }
   }
 }
@@ -268,6 +329,7 @@ export function stopLinkEngine() {
   handledCorrections.clear();
   furthestIndexReached.clear();
   notifiedOrphans.clear();
+  alreadyQueuedByUs.clear();
   forwardChainingFailing = false;
   correctionFailing = false;
 }
