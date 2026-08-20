@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import type { UpdateStatus } from "../../electron/preload";
 
 export default function SettingsPage({
   onDisconnected
@@ -17,6 +18,9 @@ export default function SettingsPage({
   const [clearing, setClearing] = useState(false);
   const [exportStatus, setExportStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [appVersion, setAppVersion] = useState("");
+  const [updateStatus, setUpdateStatus] = useState<UpdateStatus>({ status: "idle", update: null });
+  const [showPatchNotes, setShowPatchNotes] = useState(false);
 
   useEffect(() => {
     window.linksAPI.getClientId().then((id) => {
@@ -26,6 +30,10 @@ export default function SettingsPage({
     window.linksAPI.getMinimizeToTray().then(setMinimizeToTrayValue);
     window.linksAPI.getShowEngineNotifications().then(setShowNotificationsValue);
     window.linksAPI.getLaunchAtLogin().then(setLaunchAtLoginValue);
+    window.linksAPI.getAppVersion().then(setAppVersion);
+    window.linksAPI.getUpdateStatus().then(setUpdateStatus);
+
+    return window.linksAPI.onUpdateStatus(setUpdateStatus);
   }, []);
 
   async function handleSaveClientId() {
@@ -112,14 +120,117 @@ export default function SettingsPage({
     }
   }
 
+  async function handleCheckForUpdates() {
+    const result = await window.linksAPI.checkForUpdatesNow();
+    if (!result.ok && result.reason) setError(result.reason);
+  }
+
   function maskClientId(id: string): string {
     if (id.length <= 8) return id;
     return `${id.slice(0, 4)}${"•".repeat(8)}${id.slice(-4)}`;
   }
 
+  function updateStatusLabel(): string {
+    switch (updateStatus.status) {
+      case "checking":
+        return "Checking for updates…";
+      case "downloading":
+        return `Downloading version ${updateStatus.update?.version}…`;
+      case "downloaded":
+        return `Version ${updateStatus.update?.version} is ready to install`;
+      case "error":
+        return "Couldn't check for updates";
+      default:
+        return "You're up to date";
+    }
+  }
+
   return (
     <div className="screen screen-narrow">
       <h1 className="page-title">Settings</h1>
+
+      <div className="settings-section">
+        <p className="settings-section-title">Updates</p>
+
+        {updateStatus.status === "downloaded" ? (
+          <div className="update-ready-card">
+            <p className="update-ready-title">
+              Version {updateStatus.update?.version} is ready
+            </p>
+            <p className="settings-row-hint" style={{ marginBottom: 10 }}>
+              Links will restart to finish installing.
+            </p>
+            {updateStatus.update?.releaseNotes && (
+              <>
+                <button
+                  className="patch-notes-toggle"
+                  onClick={() => setShowPatchNotes((s) => !s)}
+                >
+                  {showPatchNotes ? "Hide what's new" : "What's new in this version"}
+                </button>
+                {showPatchNotes && (
+                  <div className="patch-notes-body">{updateStatus.update.releaseNotes}</div>
+                )}
+              </>
+            )}
+            <div className="button-row" style={{ marginTop: 12 }}>
+              <button className="btn btn-primary" onClick={() => window.linksAPI.installUpdate()}>
+                Restart &amp; update
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="settings-row">
+            <div>
+              <p className="settings-row-label">Version {appVersion || "…"}</p>
+              <p className="settings-row-hint">{updateStatusLabel()}</p>
+            </div>
+            <button
+              className="btn"
+              onClick={handleCheckForUpdates}
+              disabled={updateStatus.status === "checking" || updateStatus.status === "downloading"}
+            >
+              Check now
+            </button>
+          </div>
+        )}
+      </div>
+
+      <div className="settings-section">
+        <p className="settings-section-title">Notifications</p>
+        <div className="settings-row">
+          <div>
+            <p className="settings-row-label">Show queue notifications</p>
+            <p className="settings-row-hint">
+              A brief popup whenever Links adds a track to your queue or corrects the order.
+            </p>
+          </div>
+          <label className="toggle-switch">
+            <input
+              type="checkbox"
+              checked={showNotifications}
+              onChange={handleToggleShowNotifications}
+              aria-label="Show a notification when Links adds a track to the queue"
+            />
+            <span className="toggle-switch-track" />
+          </label>
+        </div>
+      </div>
+
+      <div className="settings-section">
+        <p className="settings-section-title">Spotify account</p>
+        <div className="settings-row">
+          <div>
+            <p className="settings-row-label">Connected</p>
+            <p className="settings-row-hint">
+              Links can see what's playing and manage your queue.
+            </p>
+          </div>
+          <button className="btn" onClick={handleDisconnect} disabled={disconnecting}>
+            {disconnecting ? "Disconnecting…" : "Disconnect"}
+          </button>
+        </div>
+      </div>
 
       <div className="settings-section">
         <p className="settings-section-title">Window behavior</p>
@@ -164,42 +275,6 @@ export default function SettingsPage({
             />
             <span className="toggle-switch-track" />
           </label>
-        </div>
-      </div>
-
-      <div className="settings-section">
-        <p className="settings-section-title">Notifications</p>
-        <div className="settings-row">
-          <div>
-            <p className="settings-row-label">Show queue notifications</p>
-            <p className="settings-row-hint">
-              A brief popup whenever Links adds a track to your queue or corrects the order.
-            </p>
-          </div>
-          <label className="toggle-switch">
-            <input
-              type="checkbox"
-              checked={showNotifications}
-              onChange={handleToggleShowNotifications}
-              aria-label="Show a notification when Links adds a track to the queue"
-            />
-            <span className="toggle-switch-track" />
-          </label>
-        </div>
-      </div>
-
-      <div className="settings-section">
-        <p className="settings-section-title">Spotify account</p>
-        <div className="settings-row">
-          <div>
-            <p className="settings-row-label">Connected</p>
-            <p className="settings-row-hint">
-              Links can see what's playing and manage your queue.
-            </p>
-          </div>
-          <button className="btn" onClick={handleDisconnect} disabled={disconnecting}>
-            {disconnecting ? "Disconnecting…" : "Disconnect"}
-          </button>
         </div>
       </div>
 
@@ -284,35 +359,6 @@ export default function SettingsPage({
             </div>
           </div>
         )}
-      </div>
-
-      <div className="settings-section">
-        <p className="settings-section-title">Support Links</p>
-        <div className="support-card">
-          <div className="support-card-icon">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M18 8h1a4 4 0 0 1 0 8h-1" />
-              <path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z" />
-              <line x1="6" y1="1" x2="6" y2="4" />
-              <line x1="10" y1="1" x2="10" y2="4" />
-              <line x1="14" y1="1" x2="14" y2="4" />
-            </svg>
-          </div>
-          <div className="support-card-body">
-            <p className="support-card-title">Enjoying Links?</p>
-            <p className="support-card-text">
-              Links is free and always will be. If it's saved you from shuffle chaos, buying a coffee helps keep it going.
-            </p>
-          </div>
-          <a
-            className="btn btn-primary support-card-btn"
-            href="https://www.buymeacoffee.com/YOUR_USERNAME"
-            target="_blank"
-            rel="noreferrer"
-          >
-            Buy me a coffee
-          </a>
-        </div>
       </div>
 
       {error && <p className="error-text">{error}</p>}

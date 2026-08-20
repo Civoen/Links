@@ -45,15 +45,29 @@ let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
 
 // Distinguishes "user clicked X" (which should respect the minimize-to-tray
-// setting) from "actually quitting" (via the tray menu, or the OS shutting
-// the app down) — the latter must always close the window for real,
-// regardless of the setting, or Quit would never work.
+// setting) from "actually quitting" (via the tray menu, an installed update
+// restarting the app, or the OS shutting the app down) — the latter must
+// always close the window for real, regardless of the setting.
 let isQuitting = false;
 
 // Populated once at startup by checkForBrokenLinks() below. Not persisted —
 // recomputed fresh each launch, since "is this track still on Spotify" can
 // only change from Spotify's side, not ours.
 let brokenTrackUris: Set<string> = new Set();
+
+// How often to re-check for updates while the app stays running. Since
+// minimize-to-tray is on by default, Links can realistically stay resident
+// for days — checking once at launch and never again would mean someone
+// could sit on an old version indefinitely without knowing a fix shipped.
+const UPDATE_CHECK_INTERVAL_MS = 4 * 60 * 60 * 1000; // 4 hours
+
+interface UpdateInfo {
+  version: string;
+  releaseNotes: string | null;
+}
+
+let updateStatus: "idle" | "checking" | "available" | "downloading" | "downloaded" | "error" = "idle";
+let pendingUpdate: UpdateInfo | null = null;
 
 const gotSingleInstanceLock = app.requestSingleInstanceLock();
 if (!gotSingleInstanceLock) {
@@ -151,6 +165,63 @@ function notifyRendererOfEngineAction(message: string) {
   mainWindow?.webContents.send("engine:action", message);
 }
 
+/** electron-updater's releaseNotes can be a plain string or a per-version array — normalize to one string. */
+function normalizeReleaseNotes(notes: unknown): string | null {
+  if (!notes) return null;
+  if (typeof notes === "string") return notes;
+  if (Array.isArray(notes)) {
+    return notes
+      .map((entry) => (typeof entry === "object" && entry && "note" in entry ? String((entry as any).note ?? "") : ""))
+      .filter(Boolean)
+      .join("\n\n");
+  }
+  return null;
+}
+
+function sendUpdateStatus() {
+  mainWindow?.webContents.send("updater:status", { status: updateStatus, update: pendingUpdate });
+}
+
+function setupAutoUpdater() {
+  autoUpdater.autoDownload = true;
+
+  autoUpdater.on("checking-for-update", () => {
+    updateStatus = "checking";
+    sendUpdateStatus();
+  });
+
+  autoUpdater.on("update-available", (info) => {
+    updateStatus = "downloading";
+    pendingUpdate = { version: info.version, releaseNotes: normalizeReleaseNotes(info.releaseNotes) };
+    sendUpdateStatus();
+  });
+
+  autoUpdater.on("update-not-available", () => {
+    updateStatus = "idle";
+    pendingUpdate = null;
+    sendUpdateStatus();
+  });
+
+  autoUpdater.on("update-downloaded", (info) => {
+    updateStatus = "downloaded";
+    pendingUpdate = { version: info.version, releaseNotes: normalizeReleaseNotes(info.releaseNotes) };
+    sendUpdateStatus();
+  });
+
+  autoUpdater.on("error", (err) => {
+    console.error("[updater] error:", err);
+    updateStatus = "error";
+    sendUpdateStatus();
+  });
+}
+
+function checkForUpdates() {
+  if (process.env.NODE_ENV === "development") return;
+  autoUpdater.checkForUpdates().catch((err) => {
+    console.error("[updater] check failed:", err);
+  });
+}
+
 function registerIpcHandlers() {
   ipcMain.handle("auth:isConnected", () => isConnected());
 
@@ -179,6 +250,23 @@ function registerIpcHandlers() {
   ipcMain.handle("settings:getLaunchAtLogin", () => app.getLoginItemSettings().openAtLogin);
   ipcMain.handle("settings:setLaunchAtLogin", (_event, value: boolean) => {
     app.setLoginItemSettings({ openAtLogin: value });
+  });
+
+  ipcMain.handle("app:getVersion", () => app.getVersion());
+
+  ipcMain.handle("updater:getStatus", () => ({ status: updateStatus, update: pendingUpdate }));
+
+  ipcMain.handle("updater:checkNow", () => {
+    if (process.env.NODE_ENV === "development") {
+      return { ok: false, reason: "Updates aren't available in development mode." };
+    }
+    checkForUpdates();
+    return { ok: true };
+  });
+
+  ipcMain.handle("updater:install", () => {
+    isQuitting = true;
+    autoUpdater.quitAndInstall();
   });
 
   ipcMain.handle("tracks:search", (_event, query: string) => searchTracks(query));
@@ -266,23 +354,17 @@ app.whenReady().then(() => {
 
   registerProtocolHandling();
   registerIpcHandlers();
+  setupAutoUpdater();
   createWindow();
   createTray();
 
   if (isConnected()) {
     startLinkEngine(notifyRendererOfEngineAction);
-    // Sequenced, not fired together — both of these batch-fetch tracks
-    // from Spotify, and running them at the same moment right after
-    // startup was exactly what made the broken-link check prone to
-    // hitting rate limits and false-flagging playable tracks.
     backfillMissingAlbumArt().then(() => checkForBrokenLinks());
   }
 
-  if (process.env.NODE_ENV !== "development") {
-    autoUpdater.checkForUpdatesAndNotify().catch((err) => {
-      console.error("[updater] check failed:", err);
-    });
-  }
+  checkForUpdates();
+  setInterval(checkForUpdates, UPDATE_CHECK_INTERVAL_MS);
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();
@@ -290,9 +372,9 @@ app.whenReady().then(() => {
 });
 
 // Fires before any window-closing happens, regardless of which quit path
-// triggered it (tray "Quit", OS shutdown, etc.) — the single place that
-// marks a real quit as real, so the window's close handler above knows
-// not to intercept it.
+// triggered it (tray "Quit", an installed update restarting the app, OS
+// shutdown, etc.) — the single place that marks a real quit as real, so
+// the window's close handler above knows not to intercept it.
 app.on("before-quit", () => {
   isQuitting = true;
 });

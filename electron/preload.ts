@@ -3,6 +3,11 @@ import type { TrackSummary, PlaylistSummary } from "./spotifyApi";
 import type { Link } from "./linkStore";
 import type { SuggestedLink } from "./suggestions";
 
+export interface UpdateStatus {
+  status: "idle" | "checking" | "available" | "downloading" | "downloaded" | "error";
+  update: { version: string; releaseNotes: string | null } | null;
+}
+
 const linksAPI = {
   isConnected: (): Promise<boolean> => ipcRenderer.invoke("auth:isConnected"),
   startAuth: (): Promise<boolean> => ipcRenderer.invoke("auth:start"),
@@ -40,6 +45,20 @@ const linksAPI = {
   getLaunchAtLogin: (): Promise<boolean> => ipcRenderer.invoke("settings:getLaunchAtLogin"),
   setLaunchAtLogin: (value: boolean): Promise<void> =>
     ipcRenderer.invoke("settings:setLaunchAtLogin", value),
+
+  getAppVersion: (): Promise<string> => ipcRenderer.invoke("app:getVersion"),
+
+  getUpdateStatus: (): Promise<UpdateStatus> => ipcRenderer.invoke("updater:getStatus"),
+  checkForUpdatesNow: (): Promise<{ ok: boolean; reason?: string }> =>
+    ipcRenderer.invoke("updater:checkNow"),
+  installUpdate: (): Promise<void> => ipcRenderer.invoke("updater:install"),
+  onUpdateStatus: (callback: (status: UpdateStatus) => void): (() => void) => {
+    const listener = (_event: unknown, status: UpdateStatus) => callback(status);
+    ipcRenderer.on("updater:status", listener);
+    return () => {
+      ipcRenderer.removeListener("updater:status", listener);
+    };
+  },
 
   searchTracks: (query: string): Promise<TrackSummary[]> =>
     ipcRenderer.invoke("tracks:search", query),

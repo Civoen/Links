@@ -72,7 +72,7 @@ export default function Sidebar({
         {NAV_ITEMS.map((item) => (
           <button
             key={item.key}
-            className={`sidebar-nav-item${active === item.key ? " active" : ""}`}
+            className={`sidebar-nav-item${item.key === "create" ? " sidebar-nav-item-create" : ""}${active === item.key ? " active" : ""}`}
             onClick={() => onNavigate(item.key)}
             aria-current={active === item.key ? "page" : undefined}
           >
