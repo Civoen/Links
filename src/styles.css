@@ -1161,10 +1161,25 @@ body {
   z-index: 50;
 }
 
+.toast-warning {
+  border-color: rgba(224, 168, 62, 0.4);
+  border-radius: 16px;
+  max-width: 420px;
+  align-items: flex-start;
+}
+
 .toast-message {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.toast-warning .toast-message {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: unset;
+  line-height: 1.5;
+  padding: 2px 0;
 }
 
 .toast-action {
@@ -1182,4 +1197,50 @@ body {
 
 .toast-action:hover {
   background: rgba(29, 185, 84, 0.14);
+}
+
+.notification-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.notification-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  background: var(--surface);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+}
+
+.notification-warning {
+  background: rgba(224, 168, 62, 0.07);
+  border: 1px solid rgba(224, 168, 62, 0.25);
+}
+
+.notification-icon {
+  flex-shrink: 0;
+  color: var(--accent);
+  margin-top: 2px;
+}
+
+.notification-warning .notification-icon {
+  color: #e0a83e;
+}
+
+.notification-body {
+  min-width: 0;
+}
+
+.notification-message {
+  margin: 0 0 3px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.notification-time {
+  margin: 0;
+  font-size: 11px;
+  color: var(--text-muted);
 }

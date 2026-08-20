@@ -2,6 +2,8 @@ import { getPlaybackState, addToQueue, getQueue } from "./spotifyApi";
 import { findLinkByTrackUri, getLinks } from "./linkStore";
 import { POLL_INTERVAL_MS } from "./config";
 
+export type NotificationLevel = "info" | "warning";
+
 // Design rules this engine follows:
 // 1. Forward chaining: whatever track is currently playing, if it's part
 //    of a link, queue every remaining track in that link right away — not
@@ -12,7 +14,7 @@ import { POLL_INTERVAL_MS } from "./config";
 // 3. Never hijack playback: only ever add a track to "up next".
 // 4. Idempotent: only act once per situation, not once per tick.
 //
-// Three rounds of real-world bug reports shaped this file:
+// Rounds of real-world bug reports shaped this file:
 //
 // Round 1 (duplicate adds): neither Spotify's playback-state nor its
 // queue-read endpoint are fully reliable single-poll signals. Every
@@ -21,32 +23,29 @@ import { POLL_INTERVAL_MS } from "./config";
 //
 // Round 2 (randomly missed adds): the state that marks something as
 // "handled" was being set *before* the action that does the actual work,
-// not after. If that action threw for any reason (network blip, a slow
-// response, a rate limit), the exception was caught and logged, but the
-// track was already marked handled — so the engine silently gave up and
-// never retried it. Every "mark as handled" step below now happens only
-// after the corresponding action has actually completed.
+// not after. Every "mark as handled" step now happens only after the
+// corresponding action has actually completed, so a failed attempt gets
+// retried instead of silently abandoned.
 //
-// Round 3 (chain broken by a manual queue addition): with a 3+ track
-// chain, queuing only one step ahead left a real gap — if someone
-// manually added a track to their queue while an early chain member was
-// playing, it could land ahead of a later chain member that Links hadn't
-// queued yet, since Links was still waiting for that member's own
-// predecessor to start playing first. Queuing the whole remaining chain
-// the moment the first track starts closes that gap, at the cost of
-// committing to the rest of the chain earlier than strictly necessary.
-
+// Round 3 (chain broken by a manual queue addition): queuing only one
+// step ahead left a real gap for 3+ track chains — a manually-queued
+// track could land ahead of a later chain member Links hadn't queued yet.
+// Queuing the whole remaining chain the moment the first track starts
+// closes that gap.
+//
 // Round 4 (a track re-added after already being played): correction had
-// no memory of what had already played in this session. If a predecessor
-// legitimately played earlier and the listener simply moved on (by
-// skipping, or because Spotify's shuffle context served something else
-// next instead of the queued successor), correction saw "successor is
-// upcoming, predecessor isn't here right now" and concluded the link had
-// been broken — re-queuing a track that had already had its turn. Worse,
-// that re-add then made the *next* pair back look broken too, cascading
-// backward through the whole chain. Correction now tracks the furthest
-// position reached in each link and never tries to "fix" a pair whose
-// predecessor position has already been reached.
+// no memory of what had already played in this session, so it would
+// "fix" a pair that wasn't actually broken — just already finished.
+// Correction now tracks the furthest position reached in each link and
+// never touches a pair whose predecessor position has already passed.
+//
+// Round 5 (silent gaps when someone plays something else entirely):
+// Spotify's Web API has no endpoint to remove or clear queued tracks —
+// confirmed against Spotify's own current API reference, not assumed —
+// so if someone deliberately starts playing an unrelated track while
+// linked tracks are still sitting in the queue, Links has no way to
+// clean that up. It can at least say so clearly, once, rather than leave
+// it as an unexplained leftover.
 
 let pollHandle: ReturnType<typeof setInterval> | null = null;
 let lastActionedTrackUri: string | null = null;
@@ -58,18 +57,31 @@ const handledCorrections = new Set<string>();
 // session won't re-enable correction for positions already passed once.
 const furthestIndexReached = new Map<string, number>();
 
+// Which links we've already warned about having orphaned tracks stuck in
+// the queue, so the warning fires once per situation, not every poll
+// while it remains unresolved. Cleared the moment that link's tracks are
+// no longer sitting in the queue (whether the listener skipped past them
+// or they eventually played through), so a future recurrence warns again.
+const notifiedOrphans = new Set<string>();
+
+// Whether the most recent attempt at each responsibility failed, so a
+// sustained outage produces one warning, not one every three seconds.
+// Cleared the moment that responsibility next succeeds.
+let forwardChainingFailing = false;
+let correctionFailing = false;
+
 const STOPPED_CONFIRMATION_TICKS = 2;
 let consecutiveNotPlayingTicks = 0;
 
 // Prevents two tick() calls from running at once. A single tick can make
-// up to four sequential API calls; under real-world latency that can
-// exceed POLL_INTERVAL_MS, and setInterval doesn't wait for the previous
-// call to finish before firing the next one. Two overlapping ticks
-// reading and writing the same shared state is exactly the kind of thing
-// that produces intermittent, hard-to-reproduce bugs.
+// several sequential API calls; under real-world latency that can exceed
+// POLL_INTERVAL_MS, and setInterval doesn't wait for the previous call to
+// finish before firing the next one. Two overlapping ticks reading and
+// writing the same shared state is exactly the kind of thing that
+// produces intermittent, hard-to-reproduce bugs.
 let tickInProgress = false;
 
-let onAction: ((message: string) => void) | null = null;
+let onAction: ((message: string, level: NotificationLevel) => void) | null = null;
 
 async function tick() {
   if (tickInProgress) return;
@@ -88,15 +100,42 @@ async function tick() {
     consecutiveNotPlayingTicks = 0;
 
     if (state.trackUri !== lastActionedTrackUri) {
-      // Only commit to "handled" after this actually completes without
-      // throwing — if it fails partway through, state.trackUri is still
-      // != lastActionedTrackUri on the next tick, so it gets retried
-      // instead of silently skipped forever.
-      await handleForwardChaining(state.trackUri);
-      lastActionedTrackUri = state.trackUri;
+      try {
+        // Only commit to "handled" after this actually completes without
+        // throwing — if it fails partway through, state.trackUri is
+        // still != lastActionedTrackUri on the next tick, so it gets
+        // retried instead of silently skipped forever.
+        await handleForwardChaining(state.trackUri);
+        lastActionedTrackUri = state.trackUri;
+        forwardChainingFailing = false;
+      } catch (err) {
+        console.error("[linkEngine] forward chaining failed:", err);
+        if (!forwardChainingFailing) {
+          forwardChainingFailing = true;
+          onAction?.(
+            "Spotify didn't respond while Links tried to queue a linked track. Links will keep retrying automatically.",
+            "warning"
+          );
+        }
+      }
     }
 
-    await handleOutOfOrderCorrection(state.trackUri);
+    const queueUris = await getQueue();
+    checkForOrphanedLinks(state.trackUri, queueUris);
+
+    try {
+      await handleOutOfOrderCorrection(state.trackUri, queueUris);
+      correctionFailing = false;
+    } catch (err) {
+      console.error("[linkEngine] correction failed:", err);
+      if (!correctionFailing) {
+        correctionFailing = true;
+        onAction?.(
+          "Spotify didn't respond while Links tried to fix a shuffled link order. Links will keep retrying automatically.",
+          "warning"
+        );
+      }
+    }
   } catch (err) {
     console.error("[linkEngine] tick failed:", err);
   } finally {
@@ -119,12 +158,8 @@ async function handleForwardChaining(currentTrackUri: string) {
   if (remaining.length === 0) return; // last track in the chain — nothing left to queue
 
   // Queue every remaining track in this chain now, not just the next one.
-  // Queuing one-at-a-time (only adding the next track once its predecessor
-  // starts playing) left a real gap: if someone manually added a track to
-  // the queue while an earlier chain member was still playing, it could
-  // land ahead of a later chain member that hadn't been queued yet,
-  // breaking up the chain. Committing the whole remaining sequence up
-  // front closes that gap.
+  // Queuing one-at-a-time left a real gap for 3+ track chains — see
+  // "Round 3" above.
   const queueUris = await getQueue();
   const queuedNames: string[] = [];
 
@@ -135,17 +170,50 @@ async function handleForwardChaining(currentTrackUri: string) {
   }
 
   if (queuedNames.length === 1) {
-    onAction?.(`Queued "${queuedNames[0]}" next`);
+    onAction?.(`Queued "${queuedNames[0]}" next`, "info");
   } else if (queuedNames.length > 1) {
-    onAction?.(`Queued ${queuedNames.length} tracks: ${queuedNames.join(", ")}`);
+    onAction?.(`Queued ${queuedNames.length} tracks: ${queuedNames.join(", ")}`, "info");
   }
 }
 
-async function handleOutOfOrderCorrection(currentTrackUri: string) {
+/**
+ * Warns, once per situation, when the listener has moved on to something
+ * unrelated to any active link while that link's remaining tracks are
+ * still sitting in the queue. Spotify's API has no way for an app to
+ * remove or clear queued tracks, so this can't be fixed automatically —
+ * only explained, clearly, and attributed to the actual constraint
+ * rather than framed as Links failing to do something it could.
+ */
+function checkForOrphanedLinks(currentTrackUri: string, queueUris: string[]) {
+  const currentMatch = findLinkByTrackUri(currentTrackUri);
+
+  for (const link of getLinks()) {
+    if (!link.active) continue;
+
+    const isOnThisLinkNow = currentMatch?.link.id === link.id;
+    const orphanedTracks = link.tracks.filter((t) => queueUris.includes(t.uri));
+
+    if (isOnThisLinkNow || orphanedTracks.length === 0) {
+      notifiedOrphans.delete(link.id); // situation resolved — allow a future warning if it recurs
+      continue;
+    }
+
+    if (notifiedOrphans.has(link.id)) continue; // already warned, don't repeat every poll
+
+    notifiedOrphans.add(link.id);
+    const names = orphanedTracks.map((t) => t.name);
+    const subject = names.length === 1 ? `"${names[0]}" is` : `${names.join(", ")} are`;
+    const pronoun = names.length === 1 ? "it" : "them";
+    onAction?.(
+      `${subject} still queued from earlier. Spotify doesn't give apps a way to clear queued tracks, so you'll need to skip past ${pronoun} yourself.`,
+      "warning"
+    );
+  }
+}
+
+async function handleOutOfOrderCorrection(currentTrackUri: string, queueUris: string[]) {
   const links = getLinks();
   if (links.length === 0) return;
-
-  const queueUris = await getQueue();
 
   for (const link of links) {
     if (!link.active) continue;
@@ -167,9 +235,7 @@ async function handleOutOfOrderCorrection(currentTrackUri: string) {
       // If this chain has already reached the predecessor's position at
       // some point this session, it already had its turn — re-adding it
       // now would be wrong regardless of whether it was fully played
-      // through or skipped past. This is the exact fix for a real bug:
-      // correction was re-inserting already-played tracks it had no way
-      // of knowing had already happened.
+      // through or skipped past. See "Round 4" above.
       const predecessorIndex = i - 1;
       if ((furthestIndexReached.get(link.id) ?? -1) >= predecessorIndex) continue;
 
@@ -179,18 +245,16 @@ async function handleOutOfOrderCorrection(currentTrackUri: string) {
       if (predecessorAlreadyInPlace) continue;
       if (handledCorrections.has(correctionKey)) continue;
 
-      // Mark as handled only after the add actually succeeds — same fix
-      // as forward-chaining above. Previously this line ran *before* the
-      // await, so a failed add still silently blocked all future retries
-      // of this exact correction.
+      // Mark as handled only after the add actually succeeds — see
+      // "Round 2" above.
       await addToQueue(predecessor.uri);
       handledCorrections.add(correctionKey);
-      onAction?.(`Moved "${predecessor.name}" ahead of "${successor.name}"`);
+      onAction?.(`Moved "${predecessor.name}" ahead of "${successor.name}"`, "info");
     }
   }
 }
 
-export function startLinkEngine(actionCallback?: (message: string) => void) {
+export function startLinkEngine(actionCallback?: (message: string, level: NotificationLevel) => void) {
   if (actionCallback) onAction = actionCallback;
   if (pollHandle) return;
   pollHandle = setInterval(tick, POLL_INTERVAL_MS);
@@ -203,4 +267,7 @@ export function stopLinkEngine() {
   tickInProgress = false;
   handledCorrections.clear();
   furthestIndexReached.clear();
+  notifiedOrphans.clear();
+  forwardChainingFailing = false;
+  correctionFailing = false;
 }

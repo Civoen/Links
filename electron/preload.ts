@@ -2,10 +2,16 @@ import { contextBridge, ipcRenderer } from "electron";
 import type { TrackSummary, PlaylistSummary } from "./spotifyApi";
 import type { Link } from "./linkStore";
 import type { SuggestedLink } from "./suggestions";
+import type { NotificationEntry } from "./notificationStore";
 
 export interface UpdateStatus {
   status: "idle" | "checking" | "available" | "downloading" | "downloaded" | "error";
   update: { version: string; releaseNotes: string | null } | null;
+}
+
+export interface EngineNotification {
+  message: string;
+  level: "info" | "warning";
 }
 
 const linksAPI = {
@@ -20,9 +26,11 @@ const linksAPI = {
   },
 
   // Fires whenever the link engine actually queues something, so the UI
-  // can show a brief "here's what just happened" notification.
-  onEngineAction: (callback: (message: string) => void): (() => void) => {
-    const listener = (_event: unknown, message: string) => callback(message);
+  // can show a brief "here's what just happened" toast. Every one of
+  // these is also persisted — see getNotifications/onNewNotification —
+  // so muting the toast (via settings) never means losing the history.
+  onEngineAction: (callback: (notification: EngineNotification) => void): (() => void) => {
+    const listener = (_event: unknown, notification: EngineNotification) => callback(notification);
     ipcRenderer.on("engine:action", listener);
     return () => {
       ipcRenderer.removeListener("engine:action", listener);
@@ -47,6 +55,16 @@ const linksAPI = {
     ipcRenderer.invoke("settings:setLaunchAtLogin", value),
 
   getAppVersion: (): Promise<string> => ipcRenderer.invoke("app:getVersion"),
+
+  getNotifications: (): Promise<NotificationEntry[]> => ipcRenderer.invoke("notifications:get"),
+  clearNotifications: (): Promise<void> => ipcRenderer.invoke("notifications:clear"),
+  onNewNotification: (callback: (notification: EngineNotification) => void): (() => void) => {
+    const listener = (_event: unknown, notification: EngineNotification) => callback(notification);
+    ipcRenderer.on("notifications:new", listener);
+    return () => {
+      ipcRenderer.removeListener("notifications:new", listener);
+    };
+  },
 
   getUpdateStatus: (): Promise<UpdateStatus> => ipcRenderer.invoke("updater:getStatus"),
   checkForUpdatesNow: (): Promise<{ ok: boolean; reason?: string }> =>

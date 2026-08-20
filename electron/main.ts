@@ -28,7 +28,8 @@ import {
   backfillTrackMetadata
 } from "./linkStore";
 import { findBrokenTrackUris } from "./linkHealth";
-import { startLinkEngine, stopLinkEngine } from "./linkEngine";
+import { startLinkEngine, stopLinkEngine, type NotificationLevel } from "./linkEngine";
+import { getNotifications, addNotification, clearNotifications } from "./notificationStore";
 import {
   getClientId,
   setClientId,
@@ -166,10 +167,13 @@ function registerProtocolHandling() {
   });
 }
 
-/** Forwards a description of what the engine just did to the renderer, for the in-app notification. */
-function notifyRendererOfEngineAction(message: string) {
+/** Persists every engine notification, and forwards it to the renderer for the toast (unless toasts are muted). */
+function notifyRendererOfEngineAction(message: string, level: NotificationLevel) {
+  addNotification(message, level);
+  mainWindow?.webContents.send("notifications:new", { message, level });
+
   if (!getShowEngineNotifications()) return;
-  mainWindow?.webContents.send("engine:action", message);
+  mainWindow?.webContents.send("engine:action", { message, level });
 }
 
 /** electron-updater's releaseNotes can be a plain string or a per-version array — normalize to one string. */
@@ -260,6 +264,9 @@ function registerIpcHandlers() {
   });
 
   ipcMain.handle("app:getVersion", () => app.getVersion());
+
+  ipcMain.handle("notifications:get", () => getNotifications());
+  ipcMain.handle("notifications:clear", () => clearNotifications());
 
   ipcMain.handle("updater:getStatus", () => ({ status: updateStatus, update: pendingUpdate }));
 

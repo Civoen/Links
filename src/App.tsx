@@ -5,10 +5,12 @@ import CreateLinkPage from "./pages/CreateLinkPage";
 import SettingsPage from "./pages/SettingsPage";
 import DiscoverPage from "./pages/DiscoverPage";
 import AboutPage from "./pages/AboutPage";
+import NotificationsPage from "./pages/NotificationsPage";
 import Sidebar, { type SidebarSection } from "./components/Sidebar";
 import Toast from "./components/Toast";
 import type { Link } from "../electron/linkStore";
 import type { TrackSummary } from "../electron/spotifyApi";
+import type { EngineNotification } from "../electron/preload";
 
 type Screen = "loading" | "connect" | "shell";
 
@@ -17,7 +19,7 @@ export default function App() {
   const [activeSection, setActiveSection] = useState<SidebarSection>("links");
   const [editingLink, setEditingLink] = useState<Link | null>(null);
   const [prefillTracks, setPrefillTracks] = useState<TrackSummary[] | null>(null);
-  const [engineMessage, setEngineMessage] = useState<string | null>(null);
+  const [engineNotification, setEngineNotification] = useState<EngineNotification | null>(null);
 
   useEffect(() => {
     window.linksAPI.isConnected().then((connected) => {
@@ -26,12 +28,15 @@ export default function App() {
 
     const unsubscribeAuth = window.linksAPI.onAuthUpdated(() => setScreen("shell"));
 
-    // Fires whenever the link engine actually queues something — shown as
-    // a brief notification regardless of which section is currently open.
-    // The main process already checks the "show notifications" setting
-    // before sending this at all, so nothing extra to gate here.
-    const unsubscribeEngine = window.linksAPI.onEngineAction((message) => {
-      setEngineMessage(message);
+    // Fires whenever the link engine actually queues something (or hits a
+    // warning worth surfacing) — shown as a brief toast regardless of
+    // which section is currently open. The main process already checks
+    // the "show notifications" setting before sending this at all, so
+    // nothing extra to gate here — but it's always persisted separately,
+    // so the Notifications tab has the full history even when this toast
+    // is muted.
+    const unsubscribeEngine = window.linksAPI.onEngineAction((notification) => {
+      setEngineNotification(notification);
     });
 
     return () => {
@@ -67,8 +72,12 @@ export default function App() {
 
   if (screen === "loading") return null;
 
-  const engineToast = engineMessage && (
-    <Toast message={engineMessage} onDismiss={() => setEngineMessage(null)} />
+  const engineToast = engineNotification && (
+    <Toast
+      message={engineNotification.message}
+      level={engineNotification.level}
+      onDismiss={() => setEngineNotification(null)}
+    />
   );
 
   if (screen === "connect") {
@@ -112,6 +121,8 @@ export default function App() {
         {activeSection === "discover" && (
           <DiscoverPage onCreateFromSuggestion={goToCreateFromSuggestion} />
         )}
+
+        {activeSection === "notifications" && <NotificationsPage />}
 
         {activeSection === "settings" && (
           <SettingsPage onDisconnected={() => setScreen("connect")} />
