@@ -1,0 +1,85 @@
+name: Release
+
+# Two ways to run this:
+# 1. Push a tag like v0.1.4 -> builds installers AND publishes them to a
+#    real GitHub Release. Use this only when you actually want a new
+#    shippable version.
+# 2. Actions tab -> "Release" -> "Run workflow" button -> builds installers
+#    and attaches them to that run as downloadable artifacts, with no tag
+#    and no public release created. Use this to test whether a fix
+#    actually builds, without adding to your tag list.
+#
+# macOS is intentionally not built here. Without an Apple Developer
+# Program membership ($99/year) to sign and notarize the app, current
+# macOS versions don't just warn on unsigned Electron apps — they
+# actively delete them on first launch based on the app's generic,
+# unsigned identity, with no user override available. That's not a
+# gatekeeper-style speed bump, it's a hard block, so there's no point
+# shipping a macOS build that can't actually be opened. To bring it back
+# once signing is affordable: add "macos-latest" back to the os list
+# below, and uncomment the CSC_LINK/CSC_KEY_PASSWORD/APPLE_* lines further
+# down once those secrets exist in repo Settings.
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install libfuse (needed to build an AppImage on Linux)
+        if: matrix.os == 'ubuntu-latest'
+        run: sudo apt-get update && sudo apt-get install -y libfuse2t64
+
+      - name: Set version from tag
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: bash
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          # npm requires full semver (major.minor.patch). A shorthand tag
+          # like v0.2 is only two parts and fails outright, so pad it to
+          # v0.2.0 rather than let the whole build error out over it.
+          if [[ "$TAG" =~ ^[0-9]+\.[0-9]+$ ]]; then
+            TAG="${TAG}.0"
+          fi
+          npm version "$TAG" --no-git-tag-version --allow-same-version
+
+      - run: npm install
+
+      - name: Build and publish (tagged release)
+        if: startsWith(github.ref, 'refs/tags/')
+        run: npm run release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Windows code signing (optional, currently unset — same "empty
+          # string still gets treated as a real value" caveat as before
+          # applies here too, so leave commented until real):
+          #   CSC_LINK: ${{ secrets.CSC_LINK }}
+          #   CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+
+      - name: Build only (manual test run)
+        if: github.event_name == 'workflow_dispatch'
+        run: npm run dist
+
+      - name: Upload test build
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: links-${{ matrix.os }}
+          path: release/*
