@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Manage Data | MW4 Camo Tracker</title>
+<meta property="og:type" content="website">
+<meta property="og:title" content="Manage Data | MW4 Camo Tracker">
+<meta property="og:description" content="Back up or restore your MW4 Camo Tracker progress on this browser.">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="Manage Data | MW4 Camo Tracker">
+<meta name="twitter:description" content="Back up or restore your MW4 Camo Tracker progress on this browser.">
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="theme-color" content="#131211">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="preload" href="fonts/StackSansHeadline-Bold.ttf" as="font" type="font/ttf" crossorigin>
+<link rel="preload" href="site.css" as="style">
+<link rel="preload" href="data.js" as="script">
+<link rel="stylesheet" href="site.css">
+<script src="data.js"></script>
+<style>
+  body{
+    min-height:100vh;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:24px;
+  }
+  .hero{
+    max-width:460px;
+    width:100%;
+    text-align:center;
+  }
+  .hero h1{font-size:38px;margin:14px 0 8px;}
+  .hero .sub{font-size:13.5px;margin:0 0 26px;}
+  .drop-box{
+    border:1px dashed var(--line);
+    background:var(--panel-2);
+    padding:38px 20px;
+    cursor:pointer;
+    margin-bottom:16px;
+  }
+  .drop-box.dragover{border-color:var(--hazard);}
+  .drop-box .icon{font-size:26px;color:var(--dim);display:block;margin-bottom:10px;}
+  .drop-box .label{font-size:13px;color:var(--dim);line-height:1.6;}
+  .drop-box .filename{font-size:12px;color:var(--gold);margin-top:8px;}
+  input[type=file]{display:none;}
+  .export-btn{
+    display:block;
+    width:100%;
+    background:var(--panel-2);
+    border:1px solid var(--line);
+    color:var(--paper);
+    font-family:'Barlow', sans-serif;
+    font-weight:700;
+    text-transform:uppercase;
+    letter-spacing:.03em;
+    font-size:13px;
+    padding:13px 18px;
+    cursor:pointer;
+    margin-bottom:20px;
+  }
+  .export-btn:hover{border-color:var(--hazard);color:var(--hazard);}
+  .reset-btn{
+    display:block;
+    width:100%;
+    background:var(--panel-2);
+    border:1px solid var(--danger);
+    color:#f2a89e;
+    font-family:'Barlow', sans-serif;
+    font-weight:700;
+    text-transform:uppercase;
+    letter-spacing:.03em;
+    font-size:13px;
+    padding:13px 18px;
+    cursor:pointer;
+    margin-top:32px;
+  }
+  .reset-btn:hover{background:var(--danger);color:#fff;}
+  .reset-btn.confirming{background:var(--danger);color:#fff;}
+  .test-section{
+    margin-top:28px;
+    padding:14px;
+    border:1px dashed var(--danger);
+    background:var(--panel-2);
+  }
+  .test-label{
+    font-size:10px;
+    font-weight:700;
+    text-transform:uppercase;
+    letter-spacing:.08em;
+    color:var(--danger);
+    margin-bottom:10px;
+  }
+  .test-btn{
+    display:block;
+    width:100%;
+    background:none;
+    border:1px solid var(--danger);
+    color:var(--danger);
+    font-family:'Barlow', sans-serif;
+    font-weight:700;
+    text-transform:uppercase;
+    letter-spacing:.03em;
+    font-size:12px;
+    padding:11px 16px;
+    cursor:pointer;
+  }
+  .test-btn:hover{background:var(--danger);color:#fff;}
+  .status{
+    font-size:12px;
+    padding:10px 14px;
+    margin-bottom:16px;
+    display:none;
+  }
+  .status.show{display:block;}
+  .status.success{background:var(--panel-2);color:var(--gold);border:1px solid var(--gold);}
+  .status.error{background:var(--panel-2);color:#f2a89e;border:1px solid var(--danger);}
+  .home-link{
+    display:inline-block;
+    margin-top:32px;
+    font-size:11px;
+    font-weight:700;
+    text-transform:uppercase;
+    letter-spacing:.03em;
+    color:var(--dim);
+    text-decoration:none;
+  }
+  .home-link:hover{color:var(--hazard);}
+  .mode-indicator{
+    display:inline-block;
+    font-size:11px;
+    font-weight:700;
+    text-transform:uppercase;
+    letter-spacing:.06em;
+    color:var(--dim);
+    margin-bottom:18px;
+  }
+  .mode-indicator span{color:var(--mode-accent, var(--gold));}
+  .reset-disclaimer{
+    font-size:11.5px;
+    color:var(--dim);
+    line-height:1.5;
+    margin-top:10px;
+    text-align:left;
+  }
+</style>
+</head>
+<body>
+<div class="hero">
+  <h1>Manage Data</h1>
+  <div class="sub">Back up or restore your progress on this browser</div>
+  <div class="mode-indicator" id="modeIndicator">Currently editing: <span id="modeIndicatorLabel">Multiplayer</span></div>
+
+  <div class="drop-box" id="dropBox">
+    <span class="icon">&#9660;</span>
+    <div class="label">Drag your progress file here<br>or click to browse</div>
+    <div class="filename" id="fileName"></div>
+  </div>
+  <input type="file" id="fileInput" accept=".json,application/json">
+
+  <div class="status" id="statusMsg"></div>
+
+  <button class="export-btn" id="exportBtn" type="button">Export</button>
+
+  <button class="reset-btn" id="resetBtn" type="button">Reset Progress</button>
+  <div class="reset-disclaimer">Resets Multiplayer, Warzone, <em>and</em> DMZ progress together &mdash; not just the tracker you're currently viewing.</div>
+
+  <div class="test-section">
+    <div class="test-label">Testing Only &middot; Will Be Removed</div>
+    <button class="test-btn" id="testMaxBtn" type="button">Set All Weapons to 100% (Nova) &mdash; Current Mode Only</button>
+  </div>
+
+  <a class="home-link" href="index.html">&larr; Back to Homepage</a>
+</div>
+
+<script>
+document.getElementById('modeIndicatorLabel').textContent = getModeInfo(getCurrentMode()).label;
+document.documentElement.style.setProperty('--mode-accent', getModeInfo(getCurrentMode()).accent);
+
+const MW4CAMO_PREFIX = 'mw4camo-';
+
+function collectBundle(){
+  const bundle = {};
+  try{
+    for(let i = 0; i < localStorage.length; i++){
+      const key = localStorage.key(i);
+      if(key && key.indexOf(MW4CAMO_PREFIX) === 0){
+        bundle[key] = localStorage.getItem(key);
+      }
+    }
+  }catch(e){}
+  return bundle;
+}
+
+function showStatus(message, type){
+  const el = document.getElementById('statusMsg');
+  el.textContent = message;
+  el.className = 'status show ' + type;
+}
+
+document.getElementById('exportBtn').addEventListener('click', () => {
+  const bundle = collectBundle();
+  const json = JSON.stringify(bundle, null, 2);
+  const blob = new Blob([json], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'mw4camo-progress.json';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  showStatus('Progress file downloaded.', 'success');
+});
+
+// Re-applies the "every weapon in a class needs the tier below before any
+// can hold the tier above" rule to imported data. A backup from before this
+// rule existed (or a hand-edited file) could otherwise restore an invalid
+// state, like one weapon holding Platinum while a classmate never got Gold.
+function sanitizeCamoProgress(progress){
+  if(!progress || typeof progress !== 'object') return { progress: progress, fixedCount: 0 };
+  let fixedCount = 0;
+  WEAPON_CLASSES.forEach(cls => {
+    const weapons = WEAPONS.filter(w => w.class === cls);
+    for(let i = 1; i < CAMO_TIERS.length; i++){
+      const prevKey = CAMO_TIERS[i - 1].key;
+      const allHavePrev = weapons.length > 0 && weapons.every(w => (progress[w.name] || {})[prevKey]);
+      if(!allHavePrev){
+        for(let j = i; j < CAMO_TIERS.length; j++){
+          const key = CAMO_TIERS[j].key;
+          weapons.forEach(w => {
+            if(progress[w.name] && progress[w.name][key]){
+              progress[w.name][key] = false;
+              fixedCount++;
+            }
+          });
+        }
+      }
+    }
+  });
+  return { progress: progress, fixedCount: fixedCount };
+}
+
+function handleImportFile(file){
+  if(!file){ return; }
+  if(!file.name.toLowerCase().endsWith('.json')){
+    showStatus('That doesn\'t look like a progress file (.json expected).', 'error');
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    let data;
+    try{
+      data = JSON.parse(e.target.result);
+    }catch(err){
+      showStatus('Could not read that file \u2014 it may be corrupted.', 'error');
+      return;
+    }
+    const keys = Object.keys(data).filter(k => k.indexOf(MW4CAMO_PREFIX) === 0);
+    if(keys.length === 0){
+      showStatus('No recognizable progress data found in that file.', 'error');
+      return;
+    }
+    let fixedCount = 0;
+    MODES.forEach(m => {
+      const progressKey = MW4CAMO_PREFIX + 'progress-' + m.key;
+      if(data[progressKey]){
+        try{
+          const parsed = JSON.parse(data[progressKey]);
+          const result = sanitizeCamoProgress(parsed);
+          fixedCount += result.fixedCount;
+          data[progressKey] = JSON.stringify(result.progress);
+        }catch(err){
+          // If it doesn't parse as expected, just import it as-is rather than blocking the whole restore.
+        }
+      }
+    });
+    try{
+      keys.forEach(k => localStorage.setItem(k, data[k]));
+    }catch(err){
+      showStatus('Could not save the imported data to this browser.', 'error');
+      return;
+    }
+    document.getElementById('fileName').textContent = file.name;
+    const fixedNote = fixedCount ? (' ' + fixedCount + ' invalid tier' + (fixedCount === 1 ? '' : 's') + ' (earned without the required tier below it) were automatically corrected.') : '';
+    showStatus('Progress imported \u2014 ' + keys.length + ' item(s) restored. Visit any page to see it reflected.' + fixedNote, 'success');
+  };
+  reader.readAsText(file);
+}
+
+const dropBox = document.getElementById('dropBox');
+const fileInput = document.getElementById('fileInput');
+
+dropBox.addEventListener('click', () => fileInput.click());
+fileInput.addEventListener('change', (e) => handleImportFile(e.target.files[0]));
+
+dropBox.addEventListener('dragover', (e) => { e.preventDefault(); dropBox.classList.add('dragover'); });
+dropBox.addEventListener('dragleave', () => dropBox.classList.remove('dragover'));
+dropBox.addEventListener('drop', (e) => {
+  e.preventDefault();
+  dropBox.classList.remove('dragover');
+  handleImportFile(e.dataTransfer.files[0]);
+});
+
+// ---- Reset progress (two-step confirm) ----
+const resetBtn = document.getElementById('resetBtn');
+// Reset wipes all three modes' progress/grindlist/recent together — see
+// the disclaimer text next to the button. Built from MODES so adding a
+// fourth mode later doesn't require remembering to update this list.
+const RESET_KEYS = [];
+MODES.forEach(m => {
+  RESET_KEYS.push('mw4camo-progress-' + m.key);
+  RESET_KEYS.push('mw4camo-grindlist-' + m.key);
+  RESET_KEYS.push('mw4camo-recent-' + m.key);
+});
+let resetPending = false;
+let resetTimeout = null;
+
+resetBtn.addEventListener('click', () => {
+  if(!resetPending){
+    resetPending = true;
+    resetBtn.textContent = 'Are you sure? Click to confirm';
+    resetBtn.classList.add('confirming');
+    resetTimeout = setTimeout(() => {
+      resetPending = false;
+      resetBtn.textContent = 'Reset Progress';
+      resetBtn.classList.remove('confirming');
+    }, 5000);
+    return;
+  }
+
+  clearTimeout(resetTimeout);
+  try{
+    RESET_KEYS.forEach(k => localStorage.removeItem(k));
+  }catch(e){}
+
+  resetPending = false;
+  resetBtn.classList.remove('confirming');
+  resetBtn.textContent = 'Reset Progress';
+  showStatus('Progress reset. Camo tiers, the Grind List, and recent activity have been cleared.', 'success');
+});
+
+// ---- TEMPORARY: testing-only button to instantly max every weapon ----
+// Sets every weapon to full Nova (all 4 tiers) for the CURRENT mode only,
+// pushing that mode's percentages to 100%. Not meant to ship — remove this
+// button, its CSS (.test-section/.test-label/.test-btn), and this handler
+// when done testing.
+const testMaxBtn = document.getElementById('testMaxBtn');
+if(testMaxBtn){
+  testMaxBtn.addEventListener('click', () => {
+    const modeLabel = getModeInfo(getCurrentMode()).label;
+    if(!confirm('Set every weapon to 100% (Nova) for ' + modeLabel + ' only? This overwrites current progress for that mode.')) return;
+    const progress = {};
+    WEAPONS.forEach(w => {
+      const tiers = {};
+      CAMO_TIERS.forEach(t => { tiers[t.key] = true; });
+      progress[w.name] = tiers;
+    });
+    try{
+      localStorage.setItem(modeStorageKey('mw4camo-progress'), JSON.stringify(progress));
+      showStatus('All ' + WEAPONS.length + ' weapons set to 100% (Nova) for ' + modeLabel + '. Visit any page to see it reflected.', 'success');
+    }catch(e){
+      showStatus('Could not save — this browser\'s local storage may be full.', 'error');
+    }
+  });
+}
+</script>
+</body>
+</html>

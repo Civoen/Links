@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mapfam | MW4 Camo Tracker</title>
+<meta property="og:type" content="website">
+<meta property="og:title" content="Mapfam | MW4 Camo Tracker">
+<meta property="og:description" content="A rows-of-images gallery for map notes, callouts, or whatever you want to track.">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="Mapfam | MW4 Camo Tracker">
+<meta name="twitter:description" content="A rows-of-images gallery for map notes, callouts, or whatever you want to track.">
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="theme-color" content="#131211">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="preload" href="fonts/StackSansHeadline-Bold.ttf" as="font" type="font/ttf" crossorigin>
+<link rel="preload" href="site.css" as="style">
+<link rel="preload" href="data.js" as="script">
+<link rel="preload" href="site.js" as="script">
+<link rel="stylesheet" href="site.css">
+</head>
+<body>
+<div class="wrap">
+
+  <div class="topbar">
+    <div class="topbar-right">
+      <div class="nav-mode-switcher" id="navModeSwitcher"></div>
+      <a class="trader-btn" href="index.html">Home</a>
+      <a class="trader-btn" href="camos.html">Camo Tracker</a>
+      <a class="trader-btn" href="stats.html">Stats</a>
+      <a class="trader-btn" href="recent.html">Recent</a>
+      <a class="trader-btn" href="mapfam.html">Mapfam</a>
+      <a class="trader-btn trader-btn-danger" href="import.html">Manage Data</a>
+    </div>
+  </div>
+
+  <header>
+    <h1>Mapfam</h1>
+  </header>
+
+  <section>
+    <div class="page-toolbar">
+      <button class="trader-btn" id="mapfamAddImage" type="button" style="display:none;">+ Add Image</button>
+      <button class="trader-btn" id="mapfamLockToggle" type="button">Unlock Editing</button>
+    </div>
+
+    <div class="mapfam-grid" id="mapfamGrid"></div>
+  </section>
+
+  <footer>These map layouts were created for Unknown Soldiers.</footer>
+</div>
+
+<div class="grind-list" id="grindList">
+  <div class="grind-list-bar">
+    <div class="grind-list-toggle" id="grindListToggle" role="button" tabindex="0">
+      <span>Currently Grinding</span>
+      <span class="grind-list-actions">
+        <button class="grind-list-fullscreen" id="grindListFullscreen" type="button">Full Screen</button>
+        <span class="grind-list-count" id="grindListCount">0</span>
+      </span>
+    </div>
+  </div>
+  <div class="grind-list-panel" id="grindListPanel"></div>
+</div>
+
+<script src="data.js"></script>
+<script src="site.js"></script>
+<script src="mapfam.js"></script>
+<script>
+renderNavModeSwitcher('navModeSwitcher');
+initMapfam({
+  gridElId: 'mapfamGrid',
+  addImageBtnId: 'mapfamAddImage',
+  lockToggleBtnId: 'mapfamLockToggle'
+});
+</script>
+</body>
+</html>
