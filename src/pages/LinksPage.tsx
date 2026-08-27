@@ -188,7 +188,7 @@ export default function LinksPage({
             Create one to keep two or more tracks playing in order, even on shuffle.
           </p>
           <button className="btn btn-primary" onClick={onCreateLink}>
-            Create your first link
+            Create A Link
           </button>
         </div>
       )}

@@ -155,7 +155,7 @@ body {
 
 .screen {
   padding: 24px;
-  max-width: 640px;
+  max-width: 960px;
   margin: 0 auto;
   animation: screen-enter 0.22s ease-out;
 }
@@ -226,6 +226,8 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  white-space: nowrap;
+  flex-shrink: 0;
   transition: border-color 0.15s ease, transform 0.1s ease;
 }
 
@@ -246,17 +248,17 @@ body {
 .btn-primary {
   background: var(--accent-gradient);
   color: var(--accent-text);
-  border-color: transparent;
+  border: none;
 }
 
 .btn-secondary {
   background: var(--surface);
-  border-color: transparent;
+  border: none;
 }
 
 .btn-secondary:hover {
   background: var(--surface-raised);
-  border-color: transparent;
+  border: none;
 }
 
 .btn-block {
@@ -662,6 +664,11 @@ body {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  padding: 0;
+  transition: padding 0.25s ease;
+}
+
+.link-card-expand-wrapper.expanded > .link-card-expanded-list {
   padding: 0 12px 12px;
 }
 
@@ -893,6 +900,37 @@ body {
 
 .heartbeat-stale .heartbeat-text {
   color: #e0a83e;
+}
+
+.health-context-line {
+  margin: -4px 0 14px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.health-recheck-btn {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.health-recheck-btn:hover:not(:disabled) {
+  background: var(--surface-raised);
+  color: var(--text);
+}
+
+.health-recheck-btn:disabled {
+  cursor: default;
+  opacity: 0.6;
 }
 
 .health-summary {
@@ -1129,6 +1167,10 @@ body {
   background: var(--surface);
   border-radius: var(--radius);
   padding: 14px 16px;
+}
+
+.settings-row > div:first-child {
+  min-width: 0;
 }
 
 .settings-row-label {

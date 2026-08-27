@@ -15,6 +15,7 @@ export default function SettingsPage({
   const [minimizeToTray, setMinimizeToTrayValue] = useState(true);
   const [showNotifications, setShowNotificationsValue] = useState(true);
   const [launchAtLogin, setLaunchAtLoginValue] = useState(false);
+  const [launchToTray, setLaunchToTrayValue] = useState(false);
   const [confirmingClearAll, setConfirmingClearAll] = useState(false);
   const [clearing, setClearing] = useState(false);
   const [exportStatus, setExportStatus] = useState<string | null>(null);
@@ -33,6 +34,7 @@ export default function SettingsPage({
     window.linksAPI.getMinimizeToTray().then(setMinimizeToTrayValue);
     window.linksAPI.getShowEngineNotifications().then(setShowNotificationsValue);
     window.linksAPI.getLaunchAtLogin().then(setLaunchAtLoginValue);
+    window.linksAPI.getLaunchToTray().then(setLaunchToTrayValue);
     window.linksAPI.getAppVersion().then(setAppVersion);
     window.linksAPI.getUpdateStatus().then(setUpdateStatus);
     window.linksAPI.getConnectionHealth().then(setConnectionHealth);
@@ -112,6 +114,17 @@ export default function SettingsPage({
     }
   }
 
+  async function handleToggleLaunchToTray() {
+    const next = !launchToTray;
+    setLaunchToTrayValue(next);
+    try {
+      await window.linksAPI.setLaunchToTray(next);
+    } catch {
+      setLaunchToTrayValue(!next);
+      setError("Couldn't save that setting. Try again.");
+    }
+  }
+
   async function handleExportLinks() {
     setExportStatus(null);
     try {
@@ -119,6 +132,25 @@ export default function SettingsPage({
       setExportStatus(result.ok ? `Saved to ${result.filePath}` : null);
     } catch {
       setExportStatus("Couldn't export. Try again.");
+    }
+  }
+
+  async function handleImportLinks() {
+    setExportStatus(null);
+    try {
+      const outcome = await window.linksAPI.importLinks();
+      if (!outcome.ok) {
+        if (outcome.error) setExportStatus(outcome.error);
+        return; // canceled, or a silent no-op — nothing to report
+      }
+      const { imported, skippedDuplicates, skippedInvalid } = outcome.result!;
+      const parts = [`Imported ${imported} link${imported === 1 ? "" : "s"}`];
+      if (skippedDuplicates > 0) parts.push(`${skippedDuplicates} already saved, skipped`);
+      if (skippedInvalid > 0) parts.push(`${skippedInvalid} couldn't be read`);
+      if (outcome.settingsImported) parts.push("settings applied");
+      setExportStatus(parts.join(" · "));
+    } catch {
+      setExportStatus("Couldn't import that file. Try again.");
     }
   }
 
@@ -301,6 +333,25 @@ export default function SettingsPage({
             <span className="toggle-switch-track" />
           </label>
         </div>
+
+        <div className="settings-row" style={{ marginTop: 8 }}>
+          <div>
+            <p className="settings-row-label">Launch to tray</p>
+            <p className="settings-row-hint">
+              Start minimized in the system tray instead of opening a window, useful paired with
+              Launch at login, so Links doesn't pop up every time you sign in.
+            </p>
+          </div>
+          <label className="toggle-switch">
+            <input
+              type="checkbox"
+              checked={launchToTray}
+              onChange={handleToggleLaunchToTray}
+              aria-label="Launch Links minimized to the system tray"
+            />
+            <span className="toggle-switch-track" />
+          </label>
+        </div>
       </div>
 
       <div className="settings-section">
@@ -348,10 +399,23 @@ export default function SettingsPage({
         <div className="settings-row" style={{ marginBottom: 8 }}>
           <div>
             <p className="settings-row-label">Export your links</p>
-            <p className="settings-row-hint">Save a backup file of every link you've created.</p>
+            <p className="settings-row-hint">Save a backup file of every link you've created, plus your settings.</p>
           </div>
           <button className="btn" onClick={handleExportLinks}>
             Export
+          </button>
+        </div>
+
+        <div className="settings-row" style={{ marginBottom: 8 }}>
+          <div>
+            <p className="settings-row-label">Import links</p>
+            <p className="settings-row-hint">
+              Add links and settings from a backup file, useful for moving to another device. Links
+              already saved here are skipped automatically.
+            </p>
+          </div>
+          <button className="btn" onClick={handleImportLinks}>
+            Import
           </button>
         </div>
         {exportStatus && <p className="settings-row-hint" style={{ margin: "0 0 8px 4px" }}>{exportStatus}</p>}

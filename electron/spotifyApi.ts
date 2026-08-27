@@ -21,7 +21,26 @@ export interface PlaybackState {
   shuffle: boolean;
 }
 
+// When set, spotifyFetch refuses to make further requests until this
+// time passes — populated from Spotify's own Retry-After header on a 429
+// response, so a rate limit gets genuinely respected instead of being
+// hammered again on the next 3-second poll.
+let rateLimitedUntil: number | null = null;
+
+export function isRateLimited(): boolean {
+  return rateLimitedUntil !== null && Date.now() < rateLimitedUntil;
+}
+
+export function getRateLimitRemainingSeconds(): number {
+  if (!rateLimitedUntil) return 0;
+  return Math.max(0, Math.ceil((rateLimitedUntil - Date.now()) / 1000));
+}
+
 async function spotifyFetch(path: string, init: RequestInit = {}): Promise<Response> {
+  if (isRateLimited()) {
+    throw new Error("Spotify has asked Links to slow down temporarily.");
+  }
+
   const token = await getValidAccessToken();
   if (!token) throw new Error("Not connected to Spotify");
 
@@ -32,6 +51,15 @@ async function spotifyFetch(path: string, init: RequestInit = {}): Promise<Respo
       Authorization: `Bearer ${token}`
     }
   });
+
+  if (res.status === 429) {
+    const retryAfterHeader = res.headers.get("Retry-After");
+    const parsed = retryAfterHeader ? parseInt(retryAfterHeader, 10) : NaN;
+    const retryAfterSeconds = isNaN(parsed) ? 30 : parsed; // sensible default if Spotify omits the header
+    rateLimitedUntil = Date.now() + retryAfterSeconds * 1000;
+  } else {
+    rateLimitedUntil = null;
+  }
 
   return res;
 }
@@ -123,29 +151,71 @@ export async function getPlaybackState(): Promise<PlaybackState> {
   };
 }
 
+/**
+ * Thrown specifically when Spotify's response confirms the account lacks
+ * Premium — confirmed via the documented structured error body
+ * ({"error":{"reason":"PREMIUM_REQUIRED"}}), not just any 403. A 403 can
+ * happen for other, transient reasons too, so this is only thrown when
+ * Spotify's own response explicitly says which one this is.
+ */
+export class PremiumRequiredError extends Error {
+  constructor() {
+    super("Spotify Premium is required to manage playback.");
+    this.name = "PremiumRequiredError";
+  }
+}
+
 export async function addToQueue(trackUri: string): Promise<void> {
   const params = new URLSearchParams({ uri: trackUri });
   const res = await spotifyFetch(`/me/player/queue?${params.toString()}`, { method: "POST" });
 
   if (!res.ok && res.status !== 202 && res.status !== 204) {
+    if (res.status === 403) {
+      try {
+        const body = await res.clone().json();
+        if (body?.error?.reason === "PREMIUM_REQUIRED") {
+          throw new PremiumRequiredError();
+        }
+      } catch (err) {
+        if (err instanceof PremiumRequiredError) throw err;
+        // Body wasn't parseable JSON — fall through to the generic error below.
+      }
+    }
     throw new Error(`Add to queue failed: ${res.status}`);
   }
 }
 
+export interface QueuedTrack {
+  uri: string;
+  name: string;
+  artist: string;
+  durationMs?: number;
+}
+
 /**
- * Returns the URIs of upcoming tracks, in order. Spotify's queue endpoint
- * has documented reliability quirks — it can return stale or inconsistent
+ * Returns upcoming tracks, in order. Spotify's queue endpoint has
+ * documented reliability quirks — it can return stale or inconsistent
  * results depending on shuffle state — so callers should treat this as a
  * best-effort signal, not ground truth, and re-check rather than trust a
- * single read.
+ * single read. Returns full track info, not just URIs, so callers that
+ * need identity-based matching (a track released under a different
+ * Spotify ID than what's stored) have what they need — see
+ * findQueuedTrackByIdentity in linkEngine.ts.
  */
-export async function getQueue(): Promise<string[]> {
+export async function getQueue(): Promise<QueuedTrack[]> {
   const res = await spotifyFetch("/me/player/queue");
   if (!res.ok) return [];
 
   const json = await res.json();
   const items = Array.isArray(json.queue) ? json.queue : [];
-  return items.map((t: any) => t.uri).filter(Boolean);
+  return items
+    .filter((t: any) => t?.uri)
+    .map((t: any) => ({
+      uri: t.uri,
+      name: t.name,
+      artist: Array.isArray(t.artists) ? t.artists.map((a: any) => a.name).join(", ") : "",
+      durationMs: t.duration_ms
+    }));
 }
 
 /**

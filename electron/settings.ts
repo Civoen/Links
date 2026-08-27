@@ -6,12 +6,14 @@ interface Settings {
   spotifyClientId: string | null;
   minimizeToTray: boolean;
   showEngineNotifications: boolean;
+  launchToTray: boolean;
 }
 
 const DEFAULT_SETTINGS: Settings = {
   spotifyClientId: null,
   minimizeToTray: true,
-  showEngineNotifications: true
+  showEngineNotifications: true,
+  launchToTray: false
 };
 
 const SETTINGS_PATH = () => path.join(app.getPath("userData"), "settings.json");
@@ -57,4 +59,40 @@ export function getShowEngineNotifications(): boolean {
 
 export function setShowEngineNotifications(value: boolean): void {
   writeSettings({ showEngineNotifications: value });
+}
+
+export function getLaunchToTray(): boolean {
+  return readSettings().launchToTray;
+}
+
+export function setLaunchToTray(value: boolean): void {
+  writeSettings({ launchToTray: value });
+}
+
+/** For Export — everything except nothing (there's no per-machine-only setting stored here; launch-at-login lives in the OS's own login items, not this file). */
+export function exportSettings(): Settings {
+  return readSettings();
+}
+
+/**
+ * For Import — validates each field individually rather than trusting
+ * the whole object, so a partially-malformed settings block doesn't
+ * silently wipe out fields that were actually fine. Missing entirely is
+ * fine too (an older export, from before settings were included, or a
+ * links-only file) — importing settings is a bonus on top of the links
+ * themselves, never a requirement for the import to succeed.
+ */
+export function importSettings(raw: unknown): void {
+  if (!raw || typeof raw !== "object") return;
+  const r = raw as Record<string, unknown>;
+  const patch: Partial<Settings> = {};
+
+  if (typeof r.spotifyClientId === "string" && r.spotifyClientId.trim()) {
+    patch.spotifyClientId = r.spotifyClientId.trim();
+  }
+  if (typeof r.minimizeToTray === "boolean") patch.minimizeToTray = r.minimizeToTray;
+  if (typeof r.showEngineNotifications === "boolean") patch.showEngineNotifications = r.showEngineNotifications;
+  if (typeof r.launchToTray === "boolean") patch.launchToTray = r.launchToTray;
+
+  if (Object.keys(patch).length > 0) writeSettings(patch);
 }

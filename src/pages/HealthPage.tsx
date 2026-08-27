@@ -27,18 +27,44 @@ function formatTimestamp(ts: number): string {
   return `${diffDay}d ago`;
 }
 
+function describeContextType(contextType: string | null): string {
+  if (contextType === "playlist") return "a playlist";
+  if (contextType === "album") return "an album";
+  if (contextType === "artist") return "an artist";
+  if (contextType === "show") return "a podcast";
+  return "an unrecognized context";
+}
+
 interface LinkHealth {
   link: Link;
   brokenCount: number;
   latestNotification: NotificationEntry | null;
 }
 
+interface CurrentContext {
+  isPlaying: boolean;
+  contextType: string | null;
+  shuffle: boolean;
+  observedAt: number;
+}
+
 export default function HealthPage() {
   const [health, setHealth] = useState<LinkHealth[] | null>(null);
+  const [context, setContext] = useState<CurrentContext | null>(null);
+  const [recheckingId, setRecheckingId] = useState<string | null>(null);
 
   useEffect(() => {
     refresh();
-    return window.linksAPI.onNewNotification(() => refresh());
+    refreshContext();
+    const unsubscribe = window.linksAPI.onNewNotification(() => refresh());
+    // Context can change without a notification ever firing (e.g. simply
+    // switching from a playlist to an album with nothing else happening),
+    // so it gets its own light polling rather than piggybacking on events.
+    const contextInterval = setInterval(refreshContext, 5000);
+    return () => {
+      unsubscribe();
+      clearInterval(contextInterval);
+    };
   }, []);
 
   async function refresh() {
@@ -58,6 +84,20 @@ export default function HealthPage() {
     setHealth(withHealth);
   }
 
+  async function refreshContext() {
+    setContext(await window.linksAPI.getCurrentContext());
+  }
+
+  async function handleRecheck(linkId: string) {
+    setRecheckingId(linkId);
+    try {
+      await window.linksAPI.recheckBrokenTrackUris();
+      await refresh();
+    } finally {
+      setRecheckingId(null);
+    }
+  }
+
   const healthyCount = health?.filter((h) => h.brokenCount === 0 && h.latestNotification?.level !== "warning").length ?? 0;
   const attentionCount = health ? health.length - healthyCount : 0;
 
@@ -68,6 +108,12 @@ export default function HealthPage() {
       </div>
 
       <EngineHeartbeat />
+
+      <p className="health-context-line">
+        {!context || !context.isPlaying
+          ? "Nothing is currently playing."
+          : `Currently watching ${describeContextType(context.contextType)}, shuffle ${context.shuffle ? "on" : "off"}.`}
+      </p>
 
       {health === null && <p className="muted">Loading…</p>}
 
@@ -92,6 +138,7 @@ export default function HealthPage() {
           const hasBroken = brokenCount > 0;
           const hasWarning = !hasBroken && latestNotification?.level === "warning";
           const isAttention = hasBroken || hasWarning;
+          const isRechecking = recheckingId === link.id;
 
           return (
             <div className={`health-item${isAttention ? " health-item-attention" : ""}`} key={link.id}>
@@ -130,6 +177,24 @@ export default function HealthPage() {
                   </p>
                 )}
               </div>
+
+              <button
+                className="health-recheck-btn"
+                onClick={() => handleRecheck(link.id)}
+                disabled={isRechecking}
+                aria-label={`Recheck ${linkTitle(link)}`}
+                title="Recheck against Spotify"
+              >
+                {isRechecking ? (
+                  "…"
+                ) : (
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M23 4v6h-6" />
+                    <path d="M1 20v-6h6" />
+                    <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+                  </svg>
+                )}
+              </button>
             </div>
           );
         })}

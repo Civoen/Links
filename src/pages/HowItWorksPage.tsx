@@ -61,7 +61,7 @@ export default function HowItWorksPage({ onCreateLink }: { onCreateLink: () => v
         </div>
       </div>
       <p className="howitworks-compare-caption">
-        Everything else keeps shuffling exactly as normal — only the tracks you actually link stay together.
+        Everything else keeps shuffling exactly as normal, only the tracks you actually link stay together.
       </p>
 
       <div className="howitworks-steps">
@@ -81,7 +81,7 @@ export default function HowItWorksPage({ onCreateLink }: { onCreateLink: () => v
           <div>
             <p className="howitworks-step-title">Keep shuffle on</p>
             <p className="howitworks-step-body">
-              Listen exactly like you normally do — nothing else about your Spotify changes.
+              Listen exactly like you normally do, nothing else about your Spotify changes.
             </p>
           </div>
         </div>
@@ -91,7 +91,7 @@ export default function HowItWorksPage({ onCreateLink }: { onCreateLink: () => v
           <div>
             <p className="howitworks-step-title">Links takes care of the rest</p>
             <p className="howitworks-step-body">
-              The moment the first track in a link starts playing — from anywhere — the rest of the chain
+              The moment the first track in a link starts playing, from anywhere, the rest of the chain
               gets queued right after it.
             </p>
           </div>
@@ -107,7 +107,7 @@ export default function HowItWorksPage({ onCreateLink }: { onCreateLink: () => v
       </div>
 
       <button className="btn btn-primary" onClick={onCreateLink}>
-        Create your first link
+        Create A Link
       </button>
     </div>
   );

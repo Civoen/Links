@@ -1,4 +1,4 @@
-import { app, shell, BrowserWindow } from "electron";
+import { app, shell, BrowserWindow, safeStorage } from "electron";
 import crypto from "crypto";
 import fs from "fs";
 import path from "path";
@@ -31,20 +31,50 @@ function generatePkcePair() {
   return { verifier, challenge };
 }
 
+/**
+ * Tokens are encrypted at rest using Electron's safeStorage, which is
+ * backed by the OS's own credential store (Keychain on macOS, DPAPI on
+ * Windows, a keyring on Linux where available). Falls back to plaintext
+ * only if the OS genuinely doesn't offer encryption on this machine —
+ * some minimal Linux setups without a keyring daemon — rather than
+ * refusing to store tokens at all. Also transparently migrates a token
+ * file written before this encryption existed, so upgrading doesn't sign
+ * anyone out.
+ */
 export function loadTokens(): TokenSet | null {
+  let raw: Buffer;
   try {
-    const raw = fs.readFileSync(TOKEN_PATH(), "utf-8");
-    return JSON.parse(raw) as TokenSet;
+    raw = fs.readFileSync(TOKEN_PATH());
+  } catch {
+    return null;
+  }
+
+  if (safeStorage.isEncryptionAvailable()) {
+    try {
+      return JSON.parse(safeStorage.decryptString(raw)) as TokenSet;
+    } catch {
+      // Not encrypted-format data — likely a plaintext file from before
+      // this encryption existed. Fall through to the plaintext attempt
+      // below rather than treating this as "no tokens".
+    }
+  }
+
+  try {
+    return JSON.parse(raw.toString("utf-8")) as TokenSet;
   } catch {
     return null;
   }
 }
 
 function saveTokens(tokens: TokenSet) {
-  // NOTE: for a real release build, wrap this in Electron's `safeStorage`
-  // API so tokens are encrypted at rest rather than sitting in plaintext
-  // in userData. Left plain here to keep the MVP easy to read and debug.
-  fs.writeFileSync(TOKEN_PATH(), JSON.stringify(tokens, null, 2), "utf-8");
+  const json = JSON.stringify(tokens, null, 2);
+
+  if (safeStorage.isEncryptionAvailable()) {
+    fs.writeFileSync(TOKEN_PATH(), safeStorage.encryptString(json));
+  } else {
+    console.warn("[spotifyAuth] OS-level encryption unavailable — storing tokens in plaintext.");
+    fs.writeFileSync(TOKEN_PATH(), json, "utf-8");
+  }
 }
 
 export function isConnected(): boolean {

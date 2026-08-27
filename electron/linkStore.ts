@@ -80,7 +80,7 @@ function assertNoDuplicateTracks(tracks: TrackSummary[]): void {
   const seen = new Set<string>();
   for (const track of tracks) {
     if (seen.has(track.uri)) {
-      throw new Error(`"${track.name}" is already in this chain — a track can only appear once per link.`);
+      throw new Error(`"${track.name}" is already in this chain, a track can only appear once per link.`);
     }
     seen.add(track.uri);
   }
@@ -127,7 +127,7 @@ export function reorderLinks(orderedIds: string[]): void {
   writeAll(reordered);
 }
 
-function normalizeForMatching(s: string): string {
+export function normalizeForMatching(s: string): string {
   return s.trim().toLowerCase().replace(/\s+/g, " ");
 }
 
@@ -137,7 +137,7 @@ function normalizeForMatching(s: string): string {
 // "Interlude" or "Intro" across different albums) essentially never pass
 // this by coincidence, loose enough to absorb tiny metadata differences
 // between catalog entries of the literal same audio.
-const IDENTITY_DURATION_TOLERANCE_MS = 3000;
+export const IDENTITY_DURATION_TOLERANCE_MS = 3000;
 
 export interface TrackMatch {
   link: Link;
@@ -213,6 +213,74 @@ export function findDuplicateLink(tracks: TrackSummary[], excludeId?: string): L
     if (link.tracks.every((t, i) => t.uri === uris[i])) return link;
   }
   return null;
+}
+
+export interface ImportResult {
+  imported: number;
+  skippedDuplicates: number;
+  skippedInvalid: number;
+}
+
+/**
+ * Imports links from a previously-exported file, adding them alongside
+ * whatever's already saved rather than replacing anything. Never trusts
+ * IDs from the imported file (a fresh one is generated for each link,
+ * since a file exported from a different device could easily collide
+ * with IDs already in use here) and skips anything that's an exact
+ * duplicate of a link that already exists — including duplicates within
+ * the imported file itself, so re-importing the same file twice is safe.
+ */
+export function importLinks(rawLinks: unknown): ImportResult {
+  if (!Array.isArray(rawLinks)) {
+    throw new Error("This file doesn't look like a Links export.");
+  }
+
+  const existing = readAll();
+  const result: ImportResult = { imported: 0, skippedDuplicates: 0, skippedInvalid: 0 };
+  const toAdd: Link[] = [];
+
+  for (const raw of rawLinks) {
+    const tracks = isValidTrackList(raw);
+    if (!tracks) {
+      result.skippedInvalid++;
+      continue;
+    }
+
+    const isDuplicate = [...existing, ...toAdd].some((l) => isSameTrackSequence(l.tracks, tracks));
+    if (isDuplicate) {
+      result.skippedDuplicates++;
+      continue;
+    }
+
+    toAdd.push({
+      id: crypto.randomUUID(),
+      title: raw && typeof (raw as any).title === "string" ? (raw as any).title : undefined,
+      tracks,
+      active: true,
+      createdAt: Date.now()
+    });
+    result.imported++;
+  }
+
+  if (toAdd.length > 0) {
+    writeAll([...existing, ...toAdd]);
+  }
+
+  return result;
+}
+
+/** Validates that a raw imported object has a usable tracks array, returning it if so. */
+function isValidTrackList(raw: unknown): TrackSummary[] | null {
+  if (!raw || typeof raw !== "object") return null;
+  const tracks = (raw as any).tracks;
+  if (!Array.isArray(tracks) || tracks.length < 2) return null;
+  const allValid = tracks.every((t) => t && typeof t.uri === "string" && typeof t.name === "string");
+  return allValid ? tracks : null;
+}
+
+function isSameTrackSequence(a: TrackSummary[], b: TrackSummary[]): boolean {
+  if (a.length !== b.length) return false;
+  return a.every((t, i) => t.uri === b[i].uri);
 }
 
 /**

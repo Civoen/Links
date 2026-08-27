@@ -54,9 +54,19 @@ const linksAPI = {
   setLaunchAtLogin: (value: boolean): Promise<void> =>
     ipcRenderer.invoke("settings:setLaunchAtLogin", value),
 
+  getLaunchToTray: (): Promise<boolean> => ipcRenderer.invoke("settings:getLaunchToTray"),
+  setLaunchToTray: (value: boolean): Promise<void> =>
+    ipcRenderer.invoke("settings:setLaunchToTray", value),
+
   getAppVersion: (): Promise<string> => ipcRenderer.invoke("app:getVersion"),
 
   getConnectionHealth: (): Promise<ConnectionHealth> => ipcRenderer.invoke("connection:getHealth"),
+  getCurrentContext: (): Promise<{
+    isPlaying: boolean;
+    contextType: string | null;
+    shuffle: boolean;
+    observedAt: number;
+  } | null> => ipcRenderer.invoke("engine:getCurrentContext"),
   checkConnectionNow: (): Promise<ConnectionHealth> => ipcRenderer.invoke("connection:checkNow"),
 
   // Fires each time the engine genuinely completes a poll — used to drive
@@ -117,7 +127,13 @@ const linksAPI = {
   recheckBrokenTrackUris: (): Promise<string[]> =>
     ipcRenderer.invoke("links:recheckBrokenTrackUris"),
   exportLinks: (): Promise<{ ok: boolean; filePath?: string }> =>
-    ipcRenderer.invoke("links:export")
+    ipcRenderer.invoke("links:export"),
+  importLinks: (): Promise<{
+    ok: boolean;
+    result?: { imported: number; skippedDuplicates: number; skippedInvalid: number };
+    settingsImported?: boolean;
+    error?: string;
+  }> => ipcRenderer.invoke("links:import")
 };
 
 contextBridge.exposeInMainWorld("linksAPI", linksAPI);

@@ -25,10 +25,16 @@ import {
   reorderLinks,
   findDuplicateLink,
   findTracksMissingArt,
-  backfillTrackMetadata
+  backfillTrackMetadata,
+  importLinks
 } from "./linkStore";
 import { findBrokenTrackUris } from "./linkHealth";
-import { startLinkEngine, stopLinkEngine, type NotificationLevel } from "./linkEngine";
+import {
+  startLinkEngine,
+  stopLinkEngine,
+  getCurrentContext,
+  type NotificationLevel
+} from "./linkEngine";
 import {
   getNotifications,
   addNotification,
@@ -41,7 +47,11 @@ import {
   getMinimizeToTray,
   setMinimizeToTray,
   getShowEngineNotifications,
-  setShowEngineNotifications
+  setShowEngineNotifications,
+  getLaunchToTray,
+  setLaunchToTray,
+  exportSettings,
+  importSettings
 } from "./settings";
 import { findSiblingTracks } from "./suggestions";
 import type { TrackSummary } from "./spotifyApi";
@@ -95,12 +105,13 @@ if (!gotSingleInstanceLock) {
   app.quit();
 }
 
-function createWindow() {
+function createWindow(startHidden = false) {
   mainWindow = new BrowserWindow({
     width: 680,
     height: 760,
     minWidth: 560,
     minHeight: 480,
+    show: !startHidden,
     icon: path.join(__dirname, "../build/icon.png"),
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
@@ -276,6 +287,9 @@ function registerIpcHandlers() {
     setShowEngineNotifications(value)
   );
 
+  ipcMain.handle("settings:getLaunchToTray", () => getLaunchToTray());
+  ipcMain.handle("settings:setLaunchToTray", (_event, value: boolean) => setLaunchToTray(value));
+
   ipcMain.handle("settings:getLaunchAtLogin", () => app.getLoginItemSettings().openAtLogin);
   ipcMain.handle("settings:setLaunchAtLogin", (_event, value: boolean) => {
     app.setLoginItemSettings({ openAtLogin: value });
@@ -284,6 +298,7 @@ function registerIpcHandlers() {
   ipcMain.handle("app:getVersion", () => app.getVersion());
 
   ipcMain.handle("connection:getHealth", () => connectionHealth);
+  ipcMain.handle("engine:getCurrentContext", () => getCurrentContext());
   ipcMain.handle("connection:checkNow", async () => {
     await checkAndReportConnectionHealth();
     return connectionHealth;
@@ -342,8 +357,38 @@ function registerIpcHandlers() {
 
     if (canceled || !filePath) return { ok: false };
 
-    fs.writeFileSync(filePath, JSON.stringify(getLinks(), null, 2), "utf-8");
+    const payload = { links: getLinks(), settings: exportSettings() };
+    fs.writeFileSync(filePath, JSON.stringify(payload, null, 2), "utf-8");
     return { ok: true, filePath };
+  });
+
+  ipcMain.handle("links:import", async () => {
+    if (!mainWindow) return { ok: false };
+
+    const { filePaths, canceled } = await dialog.showOpenDialog(mainWindow, {
+      title: "Import Links",
+      filters: [{ name: "JSON", extensions: ["json"] }],
+      properties: ["openFile"]
+    });
+
+    if (canceled || filePaths.length === 0) return { ok: false };
+
+    try {
+      const content = fs.readFileSync(filePaths[0], "utf-8");
+      const parsed = JSON.parse(content);
+
+      // Backward-compatible with files exported before settings were
+      // included, which were just a raw array of links with no wrapper.
+      const linksData = Array.isArray(parsed) ? parsed : parsed?.links;
+      const settingsData = Array.isArray(parsed) ? null : parsed?.settings;
+
+      const result = importLinks(linksData);
+      if (settingsData) importSettings(settingsData);
+
+      return { ok: true, result, settingsImported: Boolean(settingsData) };
+    } catch (err) {
+      return { ok: false, error: err instanceof Error ? err.message : "Couldn't read that file." };
+    }
   });
 
   ipcMain.handle("playback:get", () => getPlaybackState());
@@ -397,7 +442,7 @@ async function checkAndReportConnectionHealth() {
     const message =
       connectionHealth.reason === "auth"
         ? "Links can't reach your Spotify account right now. Go to Settings, disconnect, then reconnect to restore it."
-        : "Links couldn't reach Spotify just now. This usually resolves on its own — Links will keep checking.";
+        : "Links couldn't reach Spotify just now. This usually resolves on its own, Links will keep checking.";
     notifyRendererOfEngineAction(message, "warning");
   }
 }
@@ -408,7 +453,7 @@ app.whenReady().then(() => {
   registerProtocolHandling();
   registerIpcHandlers();
   setupAutoUpdater();
-  createWindow();
+  createWindow(getLaunchToTray());
   createTray();
 
   if (isConnected()) {

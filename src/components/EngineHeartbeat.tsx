@@ -32,7 +32,7 @@ export default function EngineHeartbeat() {
 
   function statusText(): string {
     if (lastTickAt === null) return "Waiting for first check…";
-    if (isStale) return "Not responding — will retry automatically";
+    if (isStale) return "Not responding, will retry automatically";
     const secondsAgo = Math.round((now - lastTickAt) / 1000);
     return secondsAgo < 2 ? "Watching Spotify · checked just now" : `Watching Spotify · checked ${secondsAgo}s ago`;
   }
