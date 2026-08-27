@@ -1189,6 +1189,23 @@ body {
   color: #e0a83e;
 }
 
+.settings-row-hint-confirm {
+  color: var(--accent);
+  margin-top: 4px;
+}
+
+.settings-row-actions-stacked {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.settings-row-actions-stacked .btn {
+  justify-content: center;
+}
+
 .settings-row-danger {
   border: 1px solid rgba(226, 75, 74, 0.35);
 }

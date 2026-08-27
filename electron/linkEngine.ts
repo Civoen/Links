@@ -546,6 +546,14 @@ function checkForOrphanedLinks(
     const orphanedTracks = link.tracks.filter((t) => queueUris.includes(t.uri));
 
     if (isOnThisLinkNow || orphanedTracks.length === 0) {
+      if (notifiedOrphans.has(link.id)) {
+        // Was actively warned about, and the situation has genuinely
+        // resolved now — say so. Without this, the original warning
+        // stays displayed as "the latest thing that happened" for this
+        // link indefinitely, even long after it stopped being true,
+        // since nothing else would otherwise replace it.
+        safeNotify(`The tracks in "${describeLink(link)}" are no longer stuck in your queue.`, "info", link.id);
+      }
       notifiedOrphans.delete(link.id); // situation resolved — allow a future warning if it recurs
       continue;
     }

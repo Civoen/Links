@@ -169,17 +169,6 @@ export default function CreateLinkPage({
         Search for tracks, drag to reorder, and add more anywhere in the chain.
       </p>
 
-      <label className="field-label" htmlFor="link-title-input">
-        Title (optional)
-      </label>
-      <input
-        id="link-title-input"
-        className="search-input link-title-input"
-        placeholder="Leave blank to name it automatically"
-        value={titleInput}
-        onChange={(e) => setTitleInput(e.target.value)}
-      />
-
       <div className="chain-builder">
         {tracks.length === 0 ? (
           <button className="empty-slot-btn" onClick={() => openSearchAt(0)}>
@@ -272,6 +261,17 @@ export default function CreateLinkPage({
           ))}
         </div>
       )}
+
+      <label className="field-label" htmlFor="link-title-input">
+        Title (optional)
+      </label>
+      <input
+        id="link-title-input"
+        className="search-input link-title-input"
+        placeholder="Leave blank to name it automatically"
+        value={titleInput}
+        onChange={(e) => setTitleInput(e.target.value)}
+      />
 
       {duplicateWarning && (
         <div className="duplicate-warning">

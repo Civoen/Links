@@ -25,6 +25,7 @@ export default function SettingsPage({
   const [showPatchNotes, setShowPatchNotes] = useState(false);
   const [connectionHealth, setConnectionHealth] = useState<ConnectionHealth>({ ok: true });
   const [checkingConnection, setCheckingConnection] = useState(false);
+  const [connectionCheckMessage, setConnectionCheckMessage] = useState<string | null>(null);
 
   useEffect(() => {
     window.linksAPI.getClientId().then((id) => {
@@ -44,9 +45,14 @@ export default function SettingsPage({
 
   async function handleCheckConnection() {
     setCheckingConnection(true);
+    setConnectionCheckMessage(null);
     try {
       const health = await window.linksAPI.checkConnectionNow();
       setConnectionHealth(health);
+      setConnectionCheckMessage(
+        health.ok ? "Confirmed just now, still connected." : "Confirmed just now, this still needs attention."
+      );
+      setTimeout(() => setConnectionCheckMessage(null), 4000);
     } finally {
       setCheckingConnection(false);
     }
@@ -243,6 +249,35 @@ export default function SettingsPage({
       </div>
 
       <div className="settings-section">
+        <p className="settings-section-title">Spotify account</p>
+        <div className="settings-row">
+          <div>
+            <p className="settings-row-label">
+              {connectionHealth.ok ? "Connected" : "Needs attention"}
+            </p>
+            <p className={`settings-row-hint${connectionHealth.ok ? "" : " settings-row-hint-attention"}`}>
+              {connectionHealth.ok
+                ? "Links can see what's playing and manage your queue."
+                : connectionHealth.reason === "auth"
+                ? "Links can't reach your Spotify account. Disconnect, then reconnect to restore it."
+                : "Links couldn't reach Spotify just now. This usually resolves on its own."}
+            </p>
+            {connectionCheckMessage && (
+              <p className="settings-row-hint settings-row-hint-confirm">{connectionCheckMessage}</p>
+            )}
+          </div>
+          <div className="settings-row-actions-stacked">
+            <button className="btn" onClick={handleCheckConnection} disabled={checkingConnection}>
+              {checkingConnection ? "Checking…" : "Check now"}
+            </button>
+            <button className="btn" onClick={handleDisconnect} disabled={disconnecting}>
+              {disconnecting ? "Disconnecting…" : "Disconnect"}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="settings-section">
         <p className="settings-section-title">Notifications</p>
         <div className="settings-row">
           <div>
@@ -260,32 +295,6 @@ export default function SettingsPage({
             />
             <span className="toggle-switch-track" />
           </label>
-        </div>
-      </div>
-
-      <div className="settings-section">
-        <p className="settings-section-title">Spotify account</p>
-        <div className="settings-row">
-          <div>
-            <p className="settings-row-label">
-              {connectionHealth.ok ? "Connected" : "Needs attention"}
-            </p>
-            <p className={`settings-row-hint${connectionHealth.ok ? "" : " settings-row-hint-attention"}`}>
-              {connectionHealth.ok
-                ? "Links can see what's playing and manage your queue."
-                : connectionHealth.reason === "auth"
-                ? "Links can't reach your Spotify account. Disconnect, then reconnect to restore it."
-                : "Links couldn't reach Spotify just now. This usually resolves on its own."}
-            </p>
-          </div>
-          <div className="button-row" style={{ margin: 0 }}>
-            <button className="btn" onClick={handleCheckConnection} disabled={checkingConnection}>
-              {checkingConnection ? "Checking…" : "Check now"}
-            </button>
-            <button className="btn" onClick={handleDisconnect} disabled={disconnecting}>
-              {disconnecting ? "Disconnecting…" : "Disconnect"}
-            </button>
-          </div>
         </div>
       </div>
 
