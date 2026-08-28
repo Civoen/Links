@@ -649,26 +649,37 @@ async function handleOutOfOrderCorrection(
         if (predecessorAlreadyInPlace) continue;
         if (handledCorrections.has(correctionKey)) continue;
 
-        // Mark as handled only after the add actually succeeds — see "Round 2".
-        await addToQueue(predecessor.uri);
+        // Queue the predecessor AND the rest of the chain (successor
+        // onward) together, back to back — not just the predecessor
+        // alone. "successorIsUpcoming" only means the successor is
+        // somewhere in the queue; a playlist's own order gives no
+        // guarantee about how far away that is, it could be the very
+        // next song or several songs later. Queuing only the predecessor
+        // would make it play immediately while its successor still
+        // arrives however many songs later — technically correct order,
+        // but not "kept together", which is the actual point of Links.
+        // alreadyQueuedByUs guards each track individually, so a retry
+        // after a partial failure doesn't re-add whatever already
+        // succeeded.
+        const restOfChain = link.tracks.slice(i - 1); // predecessor, successor, and anything further in the chain
+        const queuedNames: string[] = [];
+        for (const track of restOfChain) {
+          if (!alreadyQueuedByUs.has(track.uri)) {
+            await addToQueue(track.uri);
+            alreadyQueuedByUs.add(track.uri);
+          }
+          queuedNames.push(track.name);
+        }
+
         handledCorrections.add(correctionKey);
-
-        // The successor was just confirmed genuinely present in the queue
-        // (that's what successorIsUpcoming means) — not added by Links,
-        // already there from the playlist itself. Without this, when the
-        // predecessor we just queued actually plays, forward-chaining has
-        // no way to know the successor is already sitting there and
-        // queues it again, creating a real duplicate. That duplicate then
-        // becomes a fresh "successor is upcoming" trigger the next time it
-        // comes around, so correction inserts the predecessor again too —
-        // a self-repeating loop, not a one-off mistake. See the bug report
-        // this fixes: a track playing "randomly" every several songs,
-        // confirmed not actually in the playlist, recurring multiple
-        // times in one session.
-        alreadyQueuedByUs.add(successor.uri);
-
         registerPendingVerification(predecessor.uri, predecessor.name, link.id);
-        safeNotify(`Moved "${predecessor.name}" ahead of "${successor.name}"`, "info", link.id);
+        safeNotify(
+          queuedNames.length === 2
+            ? `Moved "${queuedNames[0]}" ahead of "${queuedNames[1]}" so they play together`
+            : `Moved ${queuedNames.map((n) => `"${n}"`).join(", ")} to play together`,
+          "info",
+          link.id
+        );
       }
 
       correctionFailing.delete(link.id);
