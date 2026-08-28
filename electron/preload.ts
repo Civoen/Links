@@ -59,7 +59,17 @@ const linksAPI = {
   setLaunchToTray: (value: boolean): Promise<void> =>
     ipcRenderer.invoke("settings:setLaunchToTray", value),
 
+  getShowUpdateNotifications: (): Promise<boolean> =>
+    ipcRenderer.invoke("settings:getShowUpdateNotifications"),
+  setShowUpdateNotifications: (value: boolean): Promise<void> =>
+    ipcRenderer.invoke("settings:setShowUpdateNotifications", value),
+
   getAppVersion: (): Promise<string> => ipcRenderer.invoke("app:getVersion"),
+  getReleaseNotes: (): Promise<{
+    ok: boolean;
+    releases?: { version: string; title: string; body: string; publishedAt: string }[];
+    error?: string;
+  }> => ipcRenderer.invoke("app:getReleaseNotes"),
 
   getConnectionHealth: (): Promise<ConnectionHealth> => ipcRenderer.invoke("connection:getHealth"),
   getCurrentContext: (): Promise<{

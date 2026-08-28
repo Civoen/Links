@@ -652,6 +652,21 @@ async function handleOutOfOrderCorrection(
         // Mark as handled only after the add actually succeeds — see "Round 2".
         await addToQueue(predecessor.uri);
         handledCorrections.add(correctionKey);
+
+        // The successor was just confirmed genuinely present in the queue
+        // (that's what successorIsUpcoming means) — not added by Links,
+        // already there from the playlist itself. Without this, when the
+        // predecessor we just queued actually plays, forward-chaining has
+        // no way to know the successor is already sitting there and
+        // queues it again, creating a real duplicate. That duplicate then
+        // becomes a fresh "successor is upcoming" trigger the next time it
+        // comes around, so correction inserts the predecessor again too —
+        // a self-repeating loop, not a one-off mistake. See the bug report
+        // this fixes: a track playing "randomly" every several songs,
+        // confirmed not actually in the playlist, recurring multiple
+        // times in one session.
+        alreadyQueuedByUs.add(successor.uri);
+
         registerPendingVerification(predecessor.uri, predecessor.name, link.id);
         safeNotify(`Moved "${predecessor.name}" ahead of "${successor.name}"`, "info", link.id);
       }

@@ -1,6 +1,36 @@
+import { useEffect, useState } from "react";
 import logoUrl from "../assets/logo.png";
 
+interface ReleaseNote {
+  version: string;
+  title: string;
+  body: string;
+  publishedAt: string;
+}
+
+function formatReleaseDate(iso: string): string {
+  if (!iso) return "";
+  const date = new Date(iso);
+  if (isNaN(date.getTime())) return "";
+  return date.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+}
+
+const MAX_RELEASES_SHOWN = 15;
+
 export default function AboutPage() {
+  const [releases, setReleases] = useState<ReleaseNote[] | null>(null);
+  const [changelogError, setChangelogError] = useState<string | null>(null);
+
+  useEffect(() => {
+    window.linksAPI.getReleaseNotes().then((result) => {
+      if (result.ok && result.releases) {
+        setReleases(result.releases);
+      } else {
+        setChangelogError(result.error || "Couldn't load the changelog.");
+      }
+    });
+  }, []);
+
   return (
     <div className="screen">
       <h1 className="page-title">About</h1>
@@ -46,6 +76,44 @@ export default function AboutPage() {
             Buy Me a White Monster
           </a>
         </div>
+      </div>
+
+      <div className="settings-section" style={{ marginTop: 24 }}>
+        <p className="settings-section-title">Changelog</p>
+
+        {releases === null && !changelogError && <p className="muted">Loading…</p>}
+
+        {changelogError && <p className="settings-row-hint">{changelogError}</p>}
+
+        {releases !== null && releases.length === 0 && (
+          <p className="settings-row-hint">No releases published yet.</p>
+        )}
+
+        {releases !== null && releases.length > 0 && (
+          <div className="changelog-list">
+            {releases.slice(0, MAX_RELEASES_SHOWN).map((release, i) => (
+              <div className="changelog-entry" key={release.version || i}>
+                <div className="changelog-entry-header">
+                  <span className="changelog-version">{release.version}</span>
+                  <span className="changelog-title">{release.title}</span>
+                  {release.publishedAt && (
+                    <span className="changelog-date">{formatReleaseDate(release.publishedAt)}</span>
+                  )}
+                </div>
+                {release.body && <p className="changelog-body">{release.body}</p>}
+              </div>
+            ))}
+          </div>
+        )}
+
+        <a
+          className="changelog-view-all"
+          href="https://github.com/Civoen/Links/releases"
+          target="_blank"
+          rel="noreferrer"
+        >
+          View full release history on GitHub
+        </a>
       </div>
     </div>
   );

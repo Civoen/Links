@@ -14,6 +14,7 @@ interface TokenSet {
 const TOKEN_PATH = () => path.join(app.getPath("userData"), "spotify-tokens.json");
 
 let pendingVerifier: string | null = null;
+let pendingState: string | null = null;
 let pendingResolve: ((tokens: TokenSet) => void) | null = null;
 let pendingReject: ((err: Error) => void) | null = null;
 
@@ -103,13 +104,23 @@ export function startAuth(): Promise<TokenSet> {
   const { verifier, challenge } = generatePkcePair();
   pendingVerifier = verifier;
 
+  // PKCE protects against the authorization code being intercepted in
+  // transit, but doesn't by itself confirm a given callback actually
+  // corresponds to the auth request this app just started — that's what
+  // the state parameter is for. Generated fresh per attempt and checked
+  // against the value the callback comes back with, so a callback that
+  // doesn't match a currently in-progress request from this app is
+  // rejected outright rather than acted on.
+  pendingState = base64url(crypto.randomBytes(16));
+
   const params = new URLSearchParams({
     client_id: clientId,
     response_type: "code",
     redirect_uri: REDIRECT_URI,
     code_challenge_method: "S256",
     code_challenge: challenge,
-    scope: SCOPES
+    scope: SCOPES,
+    state: pendingState
   });
 
   shell.openExternal(`https://accounts.spotify.com/authorize?${params.toString()}`);
@@ -126,6 +137,15 @@ export async function handleAuthCallback(url: string) {
     const parsed = new URL(url);
     const code = parsed.searchParams.get("code");
     const error = parsed.searchParams.get("error");
+    const state = parsed.searchParams.get("state");
+
+    if (!pendingState || state !== pendingState) {
+      // Doesn't match a currently in-progress request this app actually
+      // started — could be a stray/replayed callback, or malformed input
+      // from somewhere else entirely. Reject rather than proceed with a
+      // token exchange for it.
+      throw new Error("Auth callback did not match the request that was started");
+    }
 
     if (error || !code || !pendingVerifier) {
       throw new Error(error || "Missing authorization code");
@@ -138,6 +158,7 @@ export async function handleAuthCallback(url: string) {
     pendingReject?.(err as Error);
   } finally {
     pendingVerifier = null;
+    pendingState = null;
     pendingResolve = null;
     pendingReject = null;
   }

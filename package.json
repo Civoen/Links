@@ -4,6 +4,7 @@
   "private": true,
   "description": "Links — a Spotify companion app that keeps chained tracks together during shuffle.",
   "author": "Civoen",
+  "license": "MIT",
   "main": "dist-electron/main.js",
   "scripts": {
     "dev": "concurrently -k \"vite\" \"npm:electron:dev\"",

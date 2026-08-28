@@ -16,6 +16,7 @@ export default function SettingsPage({
   const [showNotifications, setShowNotificationsValue] = useState(true);
   const [launchAtLogin, setLaunchAtLoginValue] = useState(false);
   const [launchToTray, setLaunchToTrayValue] = useState(false);
+  const [showUpdateNotifications, setShowUpdateNotificationsValue] = useState(true);
   const [confirmingClearAll, setConfirmingClearAll] = useState(false);
   const [clearing, setClearing] = useState(false);
   const [exportStatus, setExportStatus] = useState<string | null>(null);
@@ -36,6 +37,7 @@ export default function SettingsPage({
     window.linksAPI.getShowEngineNotifications().then(setShowNotificationsValue);
     window.linksAPI.getLaunchAtLogin().then(setLaunchAtLoginValue);
     window.linksAPI.getLaunchToTray().then(setLaunchToTrayValue);
+    window.linksAPI.getShowUpdateNotifications().then(setShowUpdateNotificationsValue);
     window.linksAPI.getAppVersion().then(setAppVersion);
     window.linksAPI.getUpdateStatus().then(setUpdateStatus);
     window.linksAPI.getConnectionHealth().then(setConnectionHealth);
@@ -127,6 +129,17 @@ export default function SettingsPage({
       await window.linksAPI.setLaunchToTray(next);
     } catch {
       setLaunchToTrayValue(!next);
+      setError("Couldn't save that setting. Try again.");
+    }
+  }
+
+  async function handleToggleShowUpdateNotifications() {
+    const next = !showUpdateNotifications;
+    setShowUpdateNotificationsValue(next);
+    try {
+      await window.linksAPI.setShowUpdateNotifications(next);
+    } catch {
+      setShowUpdateNotificationsValue(!next);
       setError("Couldn't save that setting. Try again.");
     }
   }
@@ -246,6 +259,25 @@ export default function SettingsPage({
             </button>
           </div>
         )}
+
+        <div className="settings-row" style={{ marginTop: 8 }}>
+          <div>
+            <p className="settings-row-label">Notify about updates</p>
+            <p className="settings-row-hint">
+              A desktop notification when a new version has finished downloading and is ready to
+              install.
+            </p>
+          </div>
+          <label className="toggle-switch">
+            <input
+              type="checkbox"
+              checked={showUpdateNotifications}
+              onChange={handleToggleShowUpdateNotifications}
+              aria-label="Show a desktop notification when an update is ready"
+            />
+            <span className="toggle-switch-track" />
+          </label>
+        </div>
       </div>
 
       <div className="settings-section">

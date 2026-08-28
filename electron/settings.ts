@@ -7,13 +7,15 @@ interface Settings {
   minimizeToTray: boolean;
   showEngineNotifications: boolean;
   launchToTray: boolean;
+  showUpdateNotifications: boolean;
 }
 
 const DEFAULT_SETTINGS: Settings = {
   spotifyClientId: null,
   minimizeToTray: true,
   showEngineNotifications: true,
-  launchToTray: false
+  launchToTray: false,
+  showUpdateNotifications: true
 };
 
 const SETTINGS_PATH = () => path.join(app.getPath("userData"), "settings.json");
@@ -69,6 +71,14 @@ export function setLaunchToTray(value: boolean): void {
   writeSettings({ launchToTray: value });
 }
 
+export function getShowUpdateNotifications(): boolean {
+  return readSettings().showUpdateNotifications;
+}
+
+export function setShowUpdateNotifications(value: boolean): void {
+  writeSettings({ showUpdateNotifications: value });
+}
+
 /** For Export — everything except nothing (there's no per-machine-only setting stored here; launch-at-login lives in the OS's own login items, not this file). */
 export function exportSettings(): Settings {
   return readSettings();
@@ -93,6 +103,7 @@ export function importSettings(raw: unknown): void {
   if (typeof r.minimizeToTray === "boolean") patch.minimizeToTray = r.minimizeToTray;
   if (typeof r.showEngineNotifications === "boolean") patch.showEngineNotifications = r.showEngineNotifications;
   if (typeof r.launchToTray === "boolean") patch.launchToTray = r.launchToTray;
+  if (typeof r.showUpdateNotifications === "boolean") patch.showUpdateNotifications = r.showUpdateNotifications;
 
   if (Object.keys(patch).length > 0) writeSettings(patch);
 }

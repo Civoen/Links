@@ -70,10 +70,12 @@ const NAV_ITEMS: { key: SidebarSection; label: string; icon: JSX.Element }[] = [
 
 export default function Sidebar({
   active,
-  onNavigate
+  onNavigate,
+  hasUnseenUpdate = false
 }: {
   active: SidebarSection;
   onNavigate: (section: SidebarSection) => void;
+  hasUnseenUpdate?: boolean;
 }) {
   return (
     <nav className="sidebar" aria-label="Main navigation">
@@ -85,7 +87,12 @@ export default function Sidebar({
             onClick={() => onNavigate(item.key)}
             aria-current={active === item.key ? "page" : undefined}
           >
-            <span className="sidebar-nav-icon">{item.icon}</span>
+            <span className="sidebar-nav-icon">
+              {item.icon}
+              {item.key === "settings" && hasUnseenUpdate && (
+                <span className="sidebar-unread-dot" aria-label="Update available" />
+              )}
+            </span>
             {item.label}
           </button>
         ))}

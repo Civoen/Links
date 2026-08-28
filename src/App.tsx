@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import ConnectPage from "./pages/ConnectPage";
 import LinksPage from "./pages/LinksPage";
 import CreateLinkPage from "./pages/CreateLinkPage";
@@ -19,6 +19,15 @@ export default function App() {
   const [activeSection, setActiveSection] = useState<SidebarSection>("links");
   const [editingLink, setEditingLink] = useState<Link | null>(null);
   const [engineNotification, setEngineNotification] = useState<EngineNotification | null>(null);
+  const [hasUnseenUpdate, setHasUnseenUpdate] = useState(false);
+
+  // Read inside the update-status listener below, which is set up once on
+  // mount — a plain closure over activeSection would go stale the moment
+  // the user navigates, since this effect never re-runs.
+  const activeSectionRef = useRef(activeSection);
+  useEffect(() => {
+    activeSectionRef.current = activeSection;
+  }, [activeSection]);
 
   useEffect(() => {
     window.linksAPI.isConnected().then((connected) => {
@@ -38,9 +47,21 @@ export default function App() {
       setEngineNotification(notification);
     });
 
+    // An update finishing its download is the moment worth flagging with
+    // the sidebar dot — "available" alone isn't actionable yet (it's still
+    // downloading), but "downloaded" means there's genuinely something to
+    // go look at. Skipped entirely if the user is already on Settings,
+    // since they'd see it directly there anyway.
+    const unsubscribeUpdate = window.linksAPI.onUpdateStatus((status) => {
+      if (status.status === "downloaded" && activeSectionRef.current !== "settings") {
+        setHasUnseenUpdate(true);
+      }
+    });
+
     return () => {
       unsubscribeAuth();
       unsubscribeEngine();
+      unsubscribeUpdate();
     };
   }, []);
 
@@ -78,6 +99,7 @@ export default function App() {
     <div className="app-shell">
       <Sidebar
         active={activeSection}
+        hasUnseenUpdate={hasUnseenUpdate}
         onNavigate={(section) => {
           // Navigating to Create directly from the sidebar (rather than via
           // "Edit" on a specific link) should always start a fresh, empty
@@ -87,6 +109,7 @@ export default function App() {
           } else {
             setActiveSection(section);
           }
+          if (section === "settings") setHasUnseenUpdate(false);
         }}
       />
       <div className="app-shell-content">

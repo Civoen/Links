@@ -52,6 +52,8 @@ import {
   setShowEngineNotifications,
   getLaunchToTray,
   setLaunchToTray,
+  getShowUpdateNotifications,
+  setShowUpdateNotifications,
   exportSettings,
   importSettings
 } from "./settings";
@@ -284,6 +286,10 @@ function setupAutoUpdater() {
     updateStatus = "downloaded";
     pendingUpdate = { version: info.version, releaseNotes: normalizeReleaseNotes(info.releaseNotes) };
     sendUpdateStatus();
+
+    if (getShowUpdateNotifications()) {
+      showDesktopNotification(`Version ${info.version} is ready to install.`, "info");
+    }
   });
 
   autoUpdater.on("error", (err) => {
@@ -291,6 +297,51 @@ function setupAutoUpdater() {
     updateStatus = "error";
     sendUpdateStatus();
   });
+}
+
+interface ReleaseNote {
+  version: string;
+  title: string;
+  body: string;
+  publishedAt: string;
+}
+
+let cachedReleaseNotes: ReleaseNote[] | null = null;
+let releaseNotesFetchedAt: number | null = null;
+const RELEASE_NOTES_CACHE_MS = 10 * 60 * 1000; // avoid re-hitting GitHub's API on every About page visit
+
+/**
+ * Reads release title/description directly from GitHub's public Releases
+ * API for this repo — no auth needed for a public repo's release list,
+ * within GitHub's standard unauthenticated rate limit. Cached for a short
+ * while since this only needs to be roughly current, not live on every
+ * visit to the About page.
+ */
+async function fetchReleaseNotes(): Promise<ReleaseNote[]> {
+  if (cachedReleaseNotes && releaseNotesFetchedAt && Date.now() - releaseNotesFetchedAt < RELEASE_NOTES_CACHE_MS) {
+    return cachedReleaseNotes;
+  }
+
+  const res = await fetch("https://api.github.com/repos/Civoen/Links/releases", {
+    headers: { Accept: "application/vnd.github+json" }
+  });
+  if (!res.ok) throw new Error(`GitHub releases request failed: ${res.status}`);
+
+  const json = await res.json();
+  if (!Array.isArray(json)) throw new Error("Unexpected response shape from GitHub");
+
+  const notes: ReleaseNote[] = json
+    .filter((r: any) => !r.draft)
+    .map((r: any) => ({
+      version: typeof r.tag_name === "string" ? r.tag_name : "",
+      title: typeof r.name === "string" && r.name ? r.name : r.tag_name,
+      body: typeof r.body === "string" ? r.body : "",
+      publishedAt: typeof r.published_at === "string" ? r.published_at : ""
+    }));
+
+  cachedReleaseNotes = notes;
+  releaseNotesFetchedAt = Date.now();
+  return notes;
 }
 
 function checkForUpdates() {
@@ -328,12 +379,25 @@ function registerIpcHandlers() {
   ipcMain.handle("settings:getLaunchToTray", () => getLaunchToTray());
   ipcMain.handle("settings:setLaunchToTray", (_event, value: boolean) => setLaunchToTray(value));
 
+  ipcMain.handle("settings:getShowUpdateNotifications", () => getShowUpdateNotifications());
+  ipcMain.handle("settings:setShowUpdateNotifications", (_event, value: boolean) =>
+    setShowUpdateNotifications(value)
+  );
+
   ipcMain.handle("settings:getLaunchAtLogin", () => app.getLoginItemSettings().openAtLogin);
   ipcMain.handle("settings:setLaunchAtLogin", (_event, value: boolean) => {
     app.setLoginItemSettings({ openAtLogin: value });
   });
 
   ipcMain.handle("app:getVersion", () => app.getVersion());
+  ipcMain.handle("app:getReleaseNotes", async () => {
+    try {
+      const releases = await fetchReleaseNotes();
+      return { ok: true, releases };
+    } catch (err) {
+      return { ok: false, error: err instanceof Error ? err.message : "Couldn't reach GitHub." };
+    }
+  });
 
   ipcMain.handle("connection:getHealth", () => connectionHealth);
   ipcMain.handle("engine:getCurrentContext", () => getCurrentContext());
