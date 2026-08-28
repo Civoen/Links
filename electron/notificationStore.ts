@@ -10,6 +10,7 @@ export interface NotificationEntry {
   message: string;
   level: NotificationLevel;
   linkId?: string; // present when the event is attributable to one specific link
+  kind?: "orphan"; // present specifically for orphan-queue warnings, so they can be reliably re-validated later without text-matching the message
 }
 
 const STORE_PATH = () => path.join(app.getPath("userData"), "notifications.json");
@@ -44,13 +45,36 @@ export function getLatestNotificationForLink(linkId: string): NotificationEntry 
   return forLink[0] ?? null;
 }
 
-export function addNotification(message: string, level: NotificationLevel, linkId?: string): NotificationEntry {
+/**
+ * Link IDs whose most recent notification is an unresolved orphan
+ * warning — used to re-validate those specific warnings against the
+ * live queue (see revalidateOrphanWarnings in linkEngine.ts), since the
+ * poll loop's own bookkeeping that would normally detect a resolution is
+ * kept only in memory and doesn't survive an app restart.
+ */
+export function getLinkIdsWithUnresolvedOrphanWarning(): string[] {
+  const latestByLink = new Map<string, NotificationEntry>();
+  for (const entry of readAll().sort((a, b) => a.timestamp - b.timestamp)) {
+    if (entry.linkId) latestByLink.set(entry.linkId, entry);
+  }
+  return [...latestByLink.values()]
+    .filter((n) => n.kind === "orphan" && n.level === "warning")
+    .map((n) => n.linkId!);
+}
+
+export function addNotification(
+  message: string,
+  level: NotificationLevel,
+  linkId?: string,
+  kind?: "orphan"
+): NotificationEntry {
   const entry: NotificationEntry = {
     id: crypto.randomUUID(),
     timestamp: Date.now(),
     message,
     level,
-    linkId
+    linkId,
+    kind
   };
 
   const entries = readAll();

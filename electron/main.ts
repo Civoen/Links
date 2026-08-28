@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, Menu, Tray, nativeImage, dialog } from "electron";
+import { app, BrowserWindow, ipcMain, Menu, Tray, nativeImage, dialog, Notification } from "electron";
 import fs from "fs";
 import path from "path";
 import { autoUpdater } from "electron-updater";
@@ -33,13 +33,15 @@ import {
   startLinkEngine,
   stopLinkEngine,
   getCurrentContext,
+  revalidateOrphanWarnings,
   type NotificationLevel
 } from "./linkEngine";
 import {
   getNotifications,
   addNotification,
   clearNotifications,
-  getLatestNotificationForLink
+  getLatestNotificationForLink,
+  getLinkIdsWithUnresolvedOrphanWarning
 } from "./notificationStore";
 import {
   getClientId,
@@ -191,13 +193,49 @@ function registerProtocolHandling() {
   });
 }
 
-/** Persists every engine notification (with which link it's about, if any), and forwards it to the renderer for the toast (unless toasts are muted). */
-function notifyRendererOfEngineAction(message: string, level: NotificationLevel, linkId?: string) {
-  addNotification(message, level, linkId);
-  mainWindow?.webContents.send("notifications:new", { message, level, linkId });
+/**
+ * Shows a native OS notification (Windows Toast, macOS Notification
+ * Center, Linux's own system) — added specifically because the in-app
+ * toast is only visible while the window is open and focused, which
+ * defeats the point for an app whose whole design is running quietly in
+ * the background. Only fires when the window genuinely isn't focused;
+ * when it is, the in-app toast already covers the same moment, and
+ * showing both would just be redundant. The exact on-screen position is
+ * governed by the OS's own notification settings, not something Links
+ * can control.
+ */
+function showDesktopNotification(message: string, level: NotificationLevel) {
+  if (!Notification.isSupported()) return;
+  if (mainWindow?.isFocused()) return;
+
+  const notification = new Notification({
+    title: "Links",
+    body: message,
+    icon: path.join(__dirname, "../build/icon.png"),
+    silent: level === "info" // routine "queued a track" pings stay quiet; warnings get the OS's normal notification sound
+  });
+
+  notification.on("click", () => {
+    mainWindow?.show();
+    mainWindow?.focus();
+  });
+
+  notification.show();
+}
+
+/** Persists every engine notification (with which link it's about, if any), and forwards it to the renderer for the toast (unless toasts are muted) — and, if the window isn't focused, to the OS as a real desktop notification too. */
+function notifyRendererOfEngineAction(
+  message: string,
+  level: NotificationLevel,
+  linkId?: string,
+  kind?: "orphan"
+) {
+  addNotification(message, level, linkId, kind);
+  mainWindow?.webContents.send("notifications:new", { message, level, linkId, kind });
 
   if (!getShowEngineNotifications()) return;
-  mainWindow?.webContents.send("engine:action", { message, level, linkId });
+  mainWindow?.webContents.send("engine:action", { message, level, linkId, kind });
+  showDesktopNotification(message, level);
 }
 
 /** Forwards each genuinely-completed poll to the renderer, for a liveness indicator that reflects real activity. */
@@ -343,6 +381,19 @@ function registerIpcHandlers() {
   ipcMain.handle("links:getBrokenTrackUris", () => [...brokenTrackUris]);
   ipcMain.handle("links:recheckBrokenTrackUris", async () => {
     brokenTrackUris = await findBrokenTrackUris();
+    // Also re-validate any orphan warnings that might have gone stale
+    // since they were last checked — the poll loop's own resolution
+    // detection can't catch a resolution that happened while the app
+    // wasn't actively tracking that link (e.g. across a restart), so
+    // Recheck gives a direct, on-demand way to fix a lingering warning
+    // right now, not just prevent future ones.
+    if (isConnected()) {
+      try {
+        await revalidateOrphanWarnings(getLinkIdsWithUnresolvedOrphanWarning());
+      } catch (err) {
+        console.error("[main] orphan re-validation during recheck failed:", err);
+      }
+    }
     return [...brokenTrackUris];
   });
 
@@ -447,6 +498,16 @@ async function checkAndReportConnectionHealth() {
   }
 }
 
+// Must match package.json's build.appId exactly. Windows uses this to
+// decide which app a toast notification is "from" — without it, Electron
+// only sets this automatically when Squirrel.Windows is detected, which
+// isn't what this app's NSIS-based installer uses, so notifications would
+// otherwise risk showing up attributed to generic "Electron" rather than
+// "Links". Set as early as possible, before anything else runs.
+if (process.platform === "win32") {
+  app.setAppUserModelId("app.links.desktop");
+}
+
 app.whenReady().then(() => {
   Menu.setApplicationMenu(null);
 
@@ -460,6 +521,13 @@ app.whenReady().then(() => {
     startLinkEngine(notifyRendererOfEngineAction, notifyRendererOfTick);
     backfillMissingAlbumArt().then(() => checkForBrokenLinks());
     checkAndReportConnectionHealth();
+    // Catches exactly the case where an orphan warning's underlying
+    // situation resolved while the app wasn't running to notice —
+    // the poll loop's own resolution detection only works within a
+    // continuous session, since its bookkeeping lives in memory.
+    revalidateOrphanWarnings(getLinkIdsWithUnresolvedOrphanWarning()).catch((err) => {
+      console.error("[main] orphan re-validation at startup failed:", err);
+    });
     setInterval(() => {
       if (isConnected()) checkAndReportConnectionHealth();
     }, CONNECTION_HEALTH_CHECK_INTERVAL_MS);

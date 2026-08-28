@@ -12,6 +12,7 @@ export interface EngineNotification {
   message: string;
   level: "info" | "warning";
   linkId?: string;
+  kind?: "orphan";
 }
 
 const linksAPI = {

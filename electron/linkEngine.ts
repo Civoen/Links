@@ -218,7 +218,9 @@ export function getCurrentContext(): CurrentContext | null {
 // every 3 seconds while waiting it out.
 let notifiedRateLimit = false;
 
-let onAction: ((message: string, level: NotificationLevel, linkId?: string) => void) | null = null;
+let onAction:
+  | ((message: string, level: NotificationLevel, linkId?: string, kind?: "orphan") => void)
+  | null = null;
 
 // Fires once per tick that actually ran to completion — deliberately not
 // fired for a tick skipped by the tickInProgress guard, since that
@@ -232,9 +234,9 @@ let onTick: (() => void) | null = null;
  * renderer) — none of that should ever be able to make a genuinely
  * successful queue action look like it failed.
  */
-function safeNotify(message: string, level: NotificationLevel, linkId?: string) {
+function safeNotify(message: string, level: NotificationLevel, linkId?: string, kind?: "orphan") {
   try {
-    onAction?.(message, level, linkId);
+    onAction?.(message, level, linkId, kind);
   } catch (err) {
     console.error("[linkEngine] notification callback failed (core action still succeeded):", err);
   }
@@ -567,7 +569,8 @@ function checkForOrphanedLinks(
     safeNotify(
       `${subject} still queued from earlier. Spotify doesn't give apps a way to clear queued tracks, so you'll need to skip past ${pronoun} yourself.`,
       "warning",
-      link.id
+      link.id,
+      "orphan"
     );
   }
 }
@@ -679,6 +682,39 @@ export function startLinkEngine(
   if (tickCallback) onTick = tickCallback;
   if (pollHandle) return;
   pollHandle = setInterval(tick, POLL_INTERVAL_MS);
+}
+
+/**
+ * Re-checks specific links' orphan warnings against the actual current
+ * queue, and announces a resolution for any that are no longer accurate.
+ * This exists specifically because the poll loop's own bookkeeping for
+ * detecting a resolution (furthestIndexReached, notifiedOrphans) lives
+ * only in memory — it resets on every app restart, and a link's
+ * resolution can only ever be detected while that link is being actively
+ * re-engaged with. If the situation actually resolved while the app
+ * wasn't tracking it (a restart in between, or simply a poll that missed
+ * the moment), the original warning would otherwise sit there
+ * indefinitely as "the latest thing that happened" for that link. This
+ * check has no such dependency — it's a fresh, direct read of what's
+ * actually in the queue right now, called at startup and available
+ * on-demand from the Health page's recheck action.
+ */
+export async function revalidateOrphanWarnings(linkIds: string[]): Promise<void> {
+  if (linkIds.length === 0) return;
+
+  const links = getLinks();
+  const queue = await getQueue();
+  const queueUris = queue.map((t) => t.uri);
+
+  for (const linkId of linkIds) {
+    const link = links.find((l) => l.id === linkId);
+    if (!link) continue;
+
+    const stillOrphaned = link.tracks.some((t) => queueUris.includes(t.uri));
+    if (!stillOrphaned) {
+      safeNotify(`The tracks in "${describeLink(link)}" are no longer stuck in your queue.`, "info", link.id);
+    }
+  }
 }
 
 export function stopLinkEngine() {

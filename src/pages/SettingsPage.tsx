@@ -283,7 +283,9 @@ export default function SettingsPage({
           <div>
             <p className="settings-row-label">Show queue notifications</p>
             <p className="settings-row-hint">
-              A brief popup whenever Links adds a track to your queue or corrects the order.
+              A brief popup whenever Links adds a track to your queue or corrects the order. Shows
+              as a desktop notification when the window isn't focused, so you'll see it even while
+              Links is running in the background.
             </p>
           </div>
           <label className="toggle-switch">
