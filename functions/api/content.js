@@ -9,8 +9,8 @@ const DEFAULT_CONTENT = {
   heroSubtext:
     "Links keeps multi-part tracks and sequences you choose playing in order, even when Spotify is on shuffle.",
   tracks: [
-    { title: "The Island, Pt. I (Dawn)", artist: "Pendulum", coverUrl: "" },
-    { title: "The Island, Pt. II (Dusk)", artist: "Pendulum", coverUrl: "" }
+    { title: "The Island, Pt. I (Dawn)", artist: "Pendulum", coverUrl: "images/the-island-cover.jpg" },
+    { title: "The Island, Pt. II (Dusk)", artist: "Pendulum", coverUrl: "images/the-island-cover.jpg" }
   ]
 };
 
