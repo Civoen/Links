@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { Link } from "../../electron/linkStore";
-import type { NotificationEntry } from "../../electron/notificationStore";
+import type { LinkStatus } from "../../electron/linkStatusStore";
 import EngineHeartbeat from "../components/EngineHeartbeat";
 
 function linkTitle(link: Link): string {
@@ -38,7 +38,7 @@ function describeContextType(contextType: string | null): string {
 interface LinkHealth {
   link: Link;
   brokenCount: number;
-  latestNotification: NotificationEntry | null;
+  status: LinkStatus | null;
 }
 
 interface CurrentContext {
@@ -77,7 +77,7 @@ export default function HealthPage() {
       links.map(async (link) => ({
         link,
         brokenCount: link.tracks.filter((t) => brokenUris.includes(t.uri)).length,
-        latestNotification: await window.linksAPI.getLatestNotificationForLink(link.id)
+        status: await window.linksAPI.getLinkStatus(link.id)
       }))
     );
 
@@ -98,7 +98,7 @@ export default function HealthPage() {
     }
   }
 
-  const healthyCount = health?.filter((h) => h.brokenCount === 0 && h.latestNotification?.level !== "warning").length ?? 0;
+  const healthyCount = health?.filter((h) => h.brokenCount === 0 && h.status?.level !== "warning").length ?? 0;
   const attentionCount = health ? health.length - healthyCount : 0;
 
   return (
@@ -133,10 +133,10 @@ export default function HealthPage() {
       )}
 
       <div className="health-list">
-        {health?.map(({ link, brokenCount, latestNotification }) => {
+        {health?.map(({ link, brokenCount, status }) => {
           const covers = uniqueCovers(link);
           const hasBroken = brokenCount > 0;
-          const hasWarning = !hasBroken && latestNotification?.level === "warning";
+          const hasWarning = !hasBroken && status?.level === "warning";
           const isAttention = hasBroken || hasWarning;
           const isRechecking = recheckingId === link.id;
 
@@ -165,11 +165,11 @@ export default function HealthPage() {
                   </p>
                 ) : hasWarning ? (
                   <p className="health-item-status health-item-status-attention">
-                    {latestNotification!.message}
+                    {status!.message}
                   </p>
-                ) : latestNotification ? (
+                ) : status ? (
                   <p className="health-item-status">
-                    Working normally · last activity {formatTimestamp(latestNotification.timestamp)}
+                    Working normally · last activity {formatTimestamp(status.updatedAt)}
                   </p>
                 ) : (
                   <p className="health-item-status health-item-status-muted">

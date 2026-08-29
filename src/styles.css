@@ -1137,6 +1137,13 @@ body {
   font-size: 13px;
 }
 
+.settings-search-input {
+  display: block;
+  width: 100%;
+  flex: none;
+  margin: 4px 0 18px;
+}
+
 .search-input:focus {
   outline: none;
   border-color: var(--accent);
@@ -1345,8 +1352,43 @@ body {
   align-items: baseline;
   flex-wrap: wrap;
   gap: 8px;
-  margin-bottom: 4px;
+  width: 100%;
+  background: transparent;
+  border: none;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
 }
+
+.changelog-chevron {
+  flex-shrink: 0;
+  align-self: center;
+  color: var(--text-muted);
+  transition: transform 0.15s ease;
+}
+
+.changelog-chevron-open {
+  transform: rotate(90deg);
+}
+
+.changelog-body-wrapper {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.2s ease;
+}
+
+.changelog-body-wrapper.expanded {
+  grid-template-rows: 1fr;
+}
+
+.changelog-body-wrapper > .changelog-body {
+  overflow: hidden;
+  min-height: 0;
+}
+
 
 .changelog-version {
   font-family: var(--font-display);
@@ -1374,6 +1416,10 @@ body {
   color: var(--text-secondary);
   line-height: 1.6;
   white-space: pre-wrap;
+}
+
+.changelog-body-wrapper.expanded > .changelog-body {
+  margin-top: 6px;
 }
 
 .changelog-view-all {

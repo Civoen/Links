@@ -17,6 +17,7 @@ export default function SettingsPage({
   const [launchAtLogin, setLaunchAtLoginValue] = useState(false);
   const [launchToTray, setLaunchToTrayValue] = useState(false);
   const [showUpdateNotifications, setShowUpdateNotificationsValue] = useState(true);
+  const [settingsSearch, setSettingsSearch] = useState("");
   const [confirmingClearAll, setConfirmingClearAll] = useState(false);
   const [clearing, setClearing] = useState(false);
   const [exportStatus, setExportStatus] = useState<string | null>(null);
@@ -210,10 +211,53 @@ export default function SettingsPage({
     }
   }
 
+  const searchQuery = settingsSearch.trim().toLowerCase();
+  const sectionMatches = (...keywords: string[]) =>
+    !searchQuery || keywords.some((k) => k.toLowerCase().includes(searchQuery));
+
+  const showUpdatesSection = sectionMatches(
+    "Updates", "version", "check for updates", "notify about updates", "desktop notification"
+  );
+  const showSpotifyAccountSection = sectionMatches("Spotify account", "connected", "disconnect", "check now");
+  const showNotificationsSection = sectionMatches(
+    "Notifications", "show queue notifications", "popup", "desktop notification"
+  );
+  const showWindowBehaviorSection = sectionMatches(
+    "Window behavior", "keep running when closed", "system tray", "minimize", "quit"
+  );
+  const showStartupSection = sectionMatches("Startup", "launch at login", "launch to tray", "sign in");
+  const showCredentialsSection = sectionMatches("Spotify app credentials", "client ID", "change");
+  const showYourDataSection = sectionMatches(
+    "Your data", "export", "import", "backup", "clear all links", "delete"
+  );
+  const noSectionsMatch =
+    !showUpdatesSection &&
+    !showSpotifyAccountSection &&
+    !showNotificationsSection &&
+    !showWindowBehaviorSection &&
+    !showStartupSection &&
+    !showCredentialsSection &&
+    !showYourDataSection;
+
   return (
     <div className="screen screen-narrow">
       <h1 className="page-title">Settings</h1>
 
+      <input
+        className="search-input settings-search-input"
+        placeholder="Search settings…"
+        value={settingsSearch}
+        onChange={(e) => setSettingsSearch(e.target.value)}
+        aria-label="Search settings"
+      />
+
+      {noSectionsMatch && (
+        <p className="muted" style={{ marginTop: 16 }}>
+          No settings match "{settingsSearch}".
+        </p>
+      )}
+
+      {showUpdatesSection && (
       <div className="settings-section">
         <p className="settings-section-title">Updates</p>
 
@@ -279,7 +323,9 @@ export default function SettingsPage({
           </label>
         </div>
       </div>
+      )}
 
+      {showSpotifyAccountSection && (
       <div className="settings-section">
         <p className="settings-section-title">Spotify account</p>
         <div className="settings-row">
@@ -308,7 +354,9 @@ export default function SettingsPage({
           </div>
         </div>
       </div>
+      )}
 
+      {showNotificationsSection && (
       <div className="settings-section">
         <p className="settings-section-title">Notifications</p>
         <div className="settings-row">
@@ -331,7 +379,9 @@ export default function SettingsPage({
           </label>
         </div>
       </div>
+      )}
 
+      {showWindowBehaviorSection && (
       <div className="settings-section">
         <p className="settings-section-title">Window behavior</p>
         <div className="settings-row">
@@ -356,7 +406,9 @@ export default function SettingsPage({
           </label>
         </div>
       </div>
+      )}
 
+      {showStartupSection && (
       <div className="settings-section">
         <p className="settings-section-title">Startup</p>
         <div className="settings-row">
@@ -396,7 +448,9 @@ export default function SettingsPage({
           </label>
         </div>
       </div>
+      )}
 
+      {showCredentialsSection && (
       <div className="settings-section">
         <p className="settings-section-title">Spotify app credentials</p>
         {!editingClientId ? (
@@ -435,7 +489,9 @@ export default function SettingsPage({
           </div>
         )}
       </div>
+      )}
 
+      {showYourDataSection && (
       <div className="settings-section">
         <p className="settings-section-title">Your data</p>
 
@@ -492,6 +548,7 @@ export default function SettingsPage({
           </div>
         )}
       </div>
+      )}
 
       {error && <p className="error-text">{error}</p>}
     </div>

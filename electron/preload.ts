@@ -96,6 +96,12 @@ const linksAPI = {
   clearNotifications: (): Promise<void> => ipcRenderer.invoke("notifications:clear"),
   getLatestNotificationForLink: (linkId: string): Promise<NotificationEntry | null> =>
     ipcRenderer.invoke("notifications:getLatestForLink", linkId),
+  getLinkStatus: (linkId: string): Promise<{
+    linkId: string;
+    level: "warning" | "info";
+    message: string;
+    updatedAt: number;
+  } | null> => ipcRenderer.invoke("links:getStatus", linkId),
   onNewNotification: (callback: (notification: EngineNotification) => void): (() => void) => {
     const listener = (_event: unknown, notification: EngineNotification) => callback(notification);
     ipcRenderer.on("notifications:new", listener);

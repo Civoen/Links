@@ -2,6 +2,7 @@ import { app, BrowserWindow, ipcMain, Menu, Tray, nativeImage, dialog, Notificat
 import fs from "fs";
 import path from "path";
 import { autoUpdater } from "electron-updater";
+import { getLinkStatus, setLinkStatus, clearLinkStatus } from "./linkStatusStore";
 import {
   startAuth,
   handleAuthCallback,
@@ -225,7 +226,7 @@ function showDesktopNotification(message: string, level: NotificationLevel) {
   notification.show();
 }
 
-/** Persists every engine notification (with which link it's about, if any), and forwards it to the renderer for the toast (unless toasts are muted) — and, if the window isn't focused, to the OS as a real desktop notification too. */
+/** Persists every engine notification (with which link it's about, if any), updates that link's current status separately (see linkStatusStore.ts for why this is deliberately independent from notification history), and forwards it to the renderer for the toast (unless toasts are muted) — and, if the window isn't focused, to the OS as a real desktop notification too. */
 function notifyRendererOfEngineAction(
   message: string,
   level: NotificationLevel,
@@ -233,6 +234,7 @@ function notifyRendererOfEngineAction(
   kind?: "orphan"
 ) {
   addNotification(message, level, linkId, kind);
+  if (linkId) setLinkStatus(linkId, level, message);
   mainWindow?.webContents.send("notifications:new", { message, level, linkId, kind });
 
   if (!getShowEngineNotifications()) return;
@@ -434,9 +436,17 @@ function registerIpcHandlers() {
   ipcMain.handle("links:save", (_event, tracks, title?: string) => saveLink(tracks, title));
   ipcMain.handle("links:update", (_event, id: string, tracks, title?: string) => updateLink(id, tracks, title));
   ipcMain.handle("links:setActive", (_event, id: string, active: boolean) => setLinkActive(id, active));
-  ipcMain.handle("links:delete", (_event, id: string) => deleteLink(id));
-  ipcMain.handle("links:clearAll", () => clearAllLinks());
+  ipcMain.handle("links:delete", (_event, id: string) => {
+    deleteLink(id);
+    clearLinkStatus(id);
+  });
+  ipcMain.handle("links:clearAll", () => {
+    for (const link of getLinks()) clearLinkStatus(link.id);
+    clearAllLinks();
+  });
   ipcMain.handle("links:reorder", (_event, orderedIds: string[]) => reorderLinks(orderedIds));
+
+  ipcMain.handle("links:getStatus", (_event, id: string) => getLinkStatus(id));
 
   ipcMain.handle("links:findDuplicate", (_event, tracks: TrackSummary[], excludeId?: string) =>
     findDuplicateLink(tracks, excludeId)

@@ -20,11 +20,13 @@ const MAX_RELEASES_SHOWN = 15;
 export default function AboutPage() {
   const [releases, setReleases] = useState<ReleaseNote[] | null>(null);
   const [changelogError, setChangelogError] = useState<string | null>(null);
+  const [expandedVersion, setExpandedVersion] = useState<string | null>(null);
 
   useEffect(() => {
     window.linksAPI.getReleaseNotes().then((result) => {
       if (result.ok && result.releases) {
         setReleases(result.releases);
+        if (result.releases.length > 0) setExpandedVersion(result.releases[0].version);
       } else {
         setChangelogError(result.error || "Couldn't load the changelog.");
       }
@@ -91,18 +93,41 @@ export default function AboutPage() {
 
         {releases !== null && releases.length > 0 && (
           <div className="changelog-list">
-            {releases.slice(0, MAX_RELEASES_SHOWN).map((release, i) => (
-              <div className="changelog-entry" key={release.version || i}>
-                <div className="changelog-entry-header">
-                  <span className="changelog-version">{release.version}</span>
-                  <span className="changelog-title">{release.title}</span>
-                  {release.publishedAt && (
-                    <span className="changelog-date">{formatReleaseDate(release.publishedAt)}</span>
-                  )}
+            {releases.slice(0, MAX_RELEASES_SHOWN).map((release, i) => {
+              const key = release.version || String(i);
+              const isExpanded = expandedVersion === key;
+              return (
+                <div className="changelog-entry" key={key}>
+                  <button
+                    className="changelog-entry-header"
+                    onClick={() => setExpandedVersion(isExpanded ? null : key)}
+                    aria-expanded={isExpanded}
+                  >
+                    <svg
+                      className={`changelog-chevron${isExpanded ? " changelog-chevron-open" : ""}`}
+                      width="12"
+                      height="12"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <polyline points="9 18 15 12 9 6" />
+                    </svg>
+                    <span className="changelog-version">{release.version}</span>
+                    <span className="changelog-title">{release.title}</span>
+                    {release.publishedAt && (
+                      <span className="changelog-date">{formatReleaseDate(release.publishedAt)}</span>
+                    )}
+                  </button>
+                  <div className={`changelog-body-wrapper${isExpanded ? " expanded" : ""}`}>
+                    {release.body && <p className="changelog-body">{release.body}</p>}
+                  </div>
                 </div>
-                {release.body && <p className="changelog-body">{release.body}</p>}
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
 
