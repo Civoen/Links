@@ -545,7 +545,15 @@ function checkForOrphanedLinks(
     }
 
     const isOnThisLinkNow = currentMatches.some((m) => m.link.id === link.id);
-    const orphanedTracks = link.tracks.filter((t) => queueUris.includes(t.uri));
+    // Being present in the queue isn't enough on its own — a track can be
+    // there simply because it's naturally coming up in whatever playlist
+    // is currently shuffling (especially true for a playlist deliberately
+    // built to contain many linked songs, exactly the scenario that
+    // exposed this). "Orphaned" specifically means Links itself queued
+    // it and playback then moved elsewhere — checking alreadyQueuedByUs
+    // is what actually captures that, rather than just "is this URI
+    // anywhere in the upcoming queue right now".
+    const orphanedTracks = link.tracks.filter((t) => queueUris.includes(t.uri) && alreadyQueuedByUs.has(t.uri));
 
     if (isOnThisLinkNow || orphanedTracks.length === 0) {
       if (notifiedOrphans.has(link.id)) {
@@ -633,8 +641,25 @@ async function handleOutOfOrderCorrection(
 
         if (queue.length === 0) continue;
 
-        const successorIsUpcoming = isTrackInQueue(queue, successor);
-        if (!successorIsUpcoming) continue;
+        // Position matters here, not just presence. A fresh addToQueue
+        // call always lands at the very front of the queue, ahead of
+        // everything already there — so if the successor is ALREADY at
+        // that front position, inserting the predecessor now naturally
+        // places it immediately before the successor, with no need to
+        // touch the successor at all. Re-queuing it in that case would
+        // create an exact duplicate sitting right next to itself — this
+        // is precisely the bug a manually-queued track exposed: someone
+        // queues the second track of a chain directly, it's sitting at
+        // index 0, and blindly re-queuing the "rest of chain" duplicated
+        // it. The bulk re-queue below is still needed, but only for the
+        // genuinely-far-away case (the different bug this logic was
+        // originally built for): a successor several songs into a
+        // playlist's own order, where inserting only the predecessor
+        // would separate them rather than keep them together.
+        const successorIndex = queue.findIndex((q) =>
+          matchesTrackIdentity(successor, q.uri, q.name, q.artist, q.durationMs)
+        );
+        if (successorIndex === -1) continue;
 
         // If this chain has already reached the predecessor's position at
         // some point this session, it already had its turn — re-adding it
@@ -649,18 +674,24 @@ async function handleOutOfOrderCorrection(
         if (predecessorAlreadyInPlace) continue;
         if (handledCorrections.has(correctionKey)) continue;
 
+        if (successorIndex === 0) {
+          await addToQueue(predecessor.uri);
+          alreadyQueuedByUs.add(successor.uri); // already genuinely in place — don't let forward-chaining duplicate it later
+          handledCorrections.add(correctionKey);
+          registerPendingVerification(predecessor.uri, predecessor.name, link.id);
+          safeNotify(`Moved "${predecessor.name}" ahead of "${successor.name}"`, "info", link.id);
+          continue;
+        }
+
         // Queue the predecessor AND the rest of the chain (successor
         // onward) together, back to back — not just the predecessor
-        // alone. "successorIsUpcoming" only means the successor is
-        // somewhere in the queue; a playlist's own order gives no
-        // guarantee about how far away that is, it could be the very
-        // next song or several songs later. Queuing only the predecessor
-        // would make it play immediately while its successor still
-        // arrives however many songs later — technically correct order,
-        // but not "kept together", which is the actual point of Links.
-        // alreadyQueuedByUs guards each track individually, so a retry
-        // after a partial failure doesn't re-add whatever already
-        // succeeded.
+        // alone. The successor here is confirmed several songs away, so
+        // queuing only the predecessor would make it play immediately
+        // while its successor still arrives however many songs later —
+        // technically correct order, but not "kept together", which is
+        // the actual point of Links. alreadyQueuedByUs guards each track
+        // individually, so a retry after a partial failure doesn't
+        // re-add whatever already succeeded.
         const restOfChain = link.tracks.slice(i - 1); // predecessor, successor, and anything further in the chain
         const queuedNames: string[] = [];
         for (const track of restOfChain) {
