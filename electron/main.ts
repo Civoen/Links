@@ -30,6 +30,7 @@ import {
   importLinks
 } from "./linkStore";
 import { findBrokenTrackUris } from "./linkHealth";
+import { createShare, fetchShare } from "./shareApi";
 import {
   startLinkEngine,
   stopLinkEngine,
@@ -178,6 +179,33 @@ function createTray() {
   });
 }
 
+/**
+ * Called for links://import?id=... — the URL the share page's "Open in
+ * Links" button uses. Fetches the actual track data (the URL only ever
+ * carries the short id, not the full track list, to keep the URL itself
+ * short and reliable) and hands it to the renderer to open on the Create
+ * Link page, pre-filled but not yet saved — see App.tsx's handling of
+ * the "import:received" event for why this deliberately doesn't save
+ * directly.
+ */
+async function handleImportUrl(url: string) {
+  const id = new URL(url).searchParams.get("id");
+  if (!id) return;
+
+  mainWindow?.show();
+  mainWindow?.focus();
+
+  const share = await fetchShare(id);
+  if (share) {
+    mainWindow?.webContents.send("import:received", { ok: true, title: share.title, tracks: share.tracks });
+  } else {
+    mainWindow?.webContents.send("import:received", {
+      ok: false,
+      error: "That shared link couldn't be loaded — it may have expired."
+    });
+  }
+}
+
 function registerProtocolHandling() {
   if (!app.isDefaultProtocolClient(PROTOCOL)) {
     app.setAsDefaultProtocolClient(PROTOCOL);
@@ -185,14 +213,22 @@ function registerProtocolHandling() {
 
   app.on("second-instance", (_event, argv) => {
     const url = argv.find((arg) => arg.startsWith(`${PROTOCOL}://`));
-    if (url) handleAuthCallback(url).then(() => mainWindow?.webContents.send("auth:updated"));
+    if (url?.startsWith(`${PROTOCOL}://import`)) {
+      handleImportUrl(url);
+    } else if (url) {
+      handleAuthCallback(url).then(() => mainWindow?.webContents.send("auth:updated"));
+    }
     mainWindow?.show();
     mainWindow?.focus();
   });
 
   app.on("open-url", (event, url) => {
     event.preventDefault();
-    handleAuthCallback(url).then(() => mainWindow?.webContents.send("auth:updated"));
+    if (url.startsWith(`${PROTOCOL}://import`)) {
+      handleImportUrl(url);
+    } else {
+      handleAuthCallback(url).then(() => mainWindow?.webContents.send("auth:updated"));
+    }
   });
 }
 
@@ -450,6 +486,10 @@ function registerIpcHandlers() {
 
   ipcMain.handle("links:findDuplicate", (_event, tracks: TrackSummary[], excludeId?: string) =>
     findDuplicateLink(tracks, excludeId)
+  );
+
+  ipcMain.handle("links:createShare", (_event, title: string, tracks: TrackSummary[]) =>
+    createShare(title, tracks)
   );
 
   ipcMain.handle("links:getBrokenTrackUris", () => [...brokenTrackUris]);

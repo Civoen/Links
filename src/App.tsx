@@ -10,6 +10,7 @@ import HowItWorksPage from "./pages/HowItWorksPage";
 import Sidebar, { type SidebarSection } from "./components/Sidebar";
 import Toast from "./components/Toast";
 import type { Link } from "../electron/linkStore";
+import type { TrackSummary } from "../electron/spotifyApi";
 import type { EngineNotification } from "../electron/preload";
 
 type Screen = "loading" | "connect" | "shell";
@@ -18,6 +19,7 @@ export default function App() {
   const [screen, setScreen] = useState<Screen>("loading");
   const [activeSection, setActiveSection] = useState<SidebarSection>("links");
   const [editingLink, setEditingLink] = useState<Link | null>(null);
+  const [importedDraft, setImportedDraft] = useState<{ title: string; tracks: TrackSummary[] } | null>(null);
   const [engineNotification, setEngineNotification] = useState<EngineNotification | null>(null);
   const [hasUnseenUpdate, setHasUnseenUpdate] = useState(false);
 
@@ -58,26 +60,45 @@ export default function App() {
       }
     });
 
+    // Fires when someone clicks "Open in Links" on a shared link's page.
+    // Deliberately does NOT save the link directly — it opens Create Link
+    // with the shared tracks already in place, so whoever's importing it
+    // gets to review, reorder, or edit before it becomes a real saved
+    // link of their own, exactly like starting from scratch but pre-filled.
+    const unsubscribeImport = window.linksAPI.onImportReceived((result) => {
+      if (result.ok && result.tracks) {
+        setEditingLink(null);
+        setImportedDraft({ title: result.title ?? "", tracks: result.tracks });
+        setActiveSection("create");
+      } else {
+        setEngineNotification({ message: result.error ?? "That shared link couldn't be loaded.", level: "warning" });
+      }
+    });
+
     return () => {
       unsubscribeAuth();
       unsubscribeEngine();
       unsubscribeUpdate();
+      unsubscribeImport();
     };
   }, []);
 
   /** Entered via the sidebar or the Links page's own "Create link" button — always starts fresh. */
   function goToFreshCreate() {
     setEditingLink(null);
+    setImportedDraft(null);
     setActiveSection("create");
   }
 
   function goToEdit(link: Link) {
     setEditingLink(link);
+    setImportedDraft(null);
     setActiveSection("create");
   }
 
   function returnToLinksAfterEditor() {
     setEditingLink(null);
+    setImportedDraft(null);
     setActiveSection("links");
   }
 
@@ -116,6 +137,8 @@ export default function App() {
         {activeSection === "create" && (
           <CreateLinkPage
             editingLink={editingLink ?? undefined}
+            prefillTitle={importedDraft?.title}
+            prefillTracks={importedDraft?.tracks}
             onSaved={returnToLinksAfterEditor}
             onCancel={returnToLinksAfterEditor}
           />

@@ -13,15 +13,25 @@ function formatDuration(ms?: number): string {
 
 export default function CreateLinkPage({
   editingLink,
+  prefillTracks,
+  prefillTitle,
   onSaved,
   onCancel
 }: {
   editingLink?: Link;
+  prefillTracks?: TrackSummary[];
+  prefillTitle?: string;
   onSaved: () => void;
   onCancel: () => void;
 }) {
-  const [tracks, setTracks] = useState<TrackSummary[]>(editingLink?.tracks ?? []);
-  const [titleInput, setTitleInput] = useState(editingLink?.title ?? "");
+  // prefillTracks/prefillTitle come from importing someone else's shared
+  // link (see App.tsx's "import:received" handling) — pre-fills the chain
+  // exactly like editingLink does, but deliberately kept separate from it:
+  // editingLink means "save updates an existing link by id", while an
+  // import is always a brand new link, just starting from someone else's
+  // tracks instead of an empty chain.
+  const [tracks, setTracks] = useState<TrackSummary[]>(editingLink?.tracks ?? prefillTracks ?? []);
+  const [titleInput, setTitleInput] = useState(editingLink?.title ?? prefillTitle ?? "");
   const [insertAt, setInsertAt] = useState<number | null>(null);
   const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
@@ -144,6 +154,7 @@ export default function CreateLinkPage({
   }
 
   const pageTitle = editingLink ? "Edit link" : "Create a link";
+  const isImported = Boolean(prefillTracks && prefillTracks.length > 0 && !editingLink);
 
   // Filtered at render time against the live chain and dismissals, rather
   // than when the background check started, so a suggestion never lingers
@@ -165,6 +176,12 @@ export default function CreateLinkPage({
   return (
     <div className="screen screen-narrow">
       <h1 className="page-title">{pageTitle}</h1>
+      {isImported && (
+        <div className="import-banner">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg>
+          Imported from a shared link. Review the chain below, then save it as your own.
+        </div>
+      )}
       <p className="muted">
         Search for tracks, drag to reorder, and add more anywhere in the chain.
       </p>

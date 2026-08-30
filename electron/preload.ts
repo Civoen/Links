@@ -140,6 +140,20 @@ const linksAPI = {
     ipcRenderer.invoke("links:reorder", orderedIds),
   findDuplicateLink: (tracks: TrackSummary[], excludeId?: string): Promise<Link | null> =>
     ipcRenderer.invoke("links:findDuplicate", tracks, excludeId),
+  createShare: (
+    title: string,
+    tracks: TrackSummary[]
+  ): Promise<{ ok: boolean; url?: string; error?: string }> =>
+    ipcRenderer.invoke("links:createShare", title, tracks),
+  onImportReceived: (
+    callback: (result: { ok: boolean; title?: string; tracks?: TrackSummary[]; error?: string }) => void
+  ): (() => void) => {
+    const listener = (_event: unknown, result: any) => callback(result);
+    ipcRenderer.on("import:received", listener);
+    return () => {
+      ipcRenderer.removeListener("import:received", listener);
+    };
+  },
   getBrokenTrackUris: (): Promise<string[]> => ipcRenderer.invoke("links:getBrokenTrackUris"),
   recheckBrokenTrackUris: (): Promise<string[]> =>
     ipcRenderer.invoke("links:recheckBrokenTrackUris"),

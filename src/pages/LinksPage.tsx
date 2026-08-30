@@ -60,6 +60,10 @@ export default function LinksPage({
   const [dragOverId, setDragOverId] = useState<string | null>(null);
   const pendingDelete = useRef<PendingDelete | null>(null);
   const [pendingDeleteMessage, setPendingDeleteMessage] = useState<string | null>(null);
+  const [shareState, setShareState] = useState<
+    { status: "loading"; title: string } | { status: "ready"; title: string; url: string } | { status: "error"; title: string; error: string } | null
+  >(null);
+  const [shareCopied, setShareCopied] = useState(false);
 
   useEffect(() => {
     refresh();
@@ -127,6 +131,33 @@ export default function LinksPage({
 
   function toggleExpanded(id: string) {
     setExpandedId((current) => (current === id ? null : id));
+  }
+
+  async function handleShare(link: Link) {
+    const title = linkTitle(link);
+    setShareCopied(false);
+    setShareState({ status: "loading", title });
+
+    const result = await window.linksAPI.createShare(title, link.tracks);
+
+    if (result.ok && result.url) {
+      setShareState({ status: "ready", title, url: result.url });
+    } else {
+      setShareState({ status: "error", title, error: result.error ?? "Couldn't create the share link." });
+    }
+  }
+
+  async function handleCopyShareLink() {
+    if (shareState?.status !== "ready") return;
+    try {
+      await navigator.clipboard.writeText(shareState.url);
+      setShareCopied(true);
+      setTimeout(() => setShareCopied(false), 2500);
+    } catch {
+      // Clipboard access can fail in some sandboxed contexts — the URL is
+      // still visible and selectable in the field either way, so this
+      // isn't a dead end even if the one-click copy doesn't go through.
+    }
   }
 
   function handleDrop(targetId: string) {
@@ -307,6 +338,7 @@ export default function LinksPage({
                     ariaLabel={`More actions for ${linkTitle(link)}`}
                     items={[
                       { label: "Edit", onClick: () => onEditLink(link) },
+                      { label: "Share", onClick: () => handleShare(link) },
                       { label: "Delete", onClick: () => handleDelete(link), danger: true }
                     ]}
                   />
@@ -368,6 +400,44 @@ export default function LinksPage({
           }}
           durationMs={5000}
         />
+      )}
+
+      {shareState && (
+        <div className="share-overlay" onClick={() => setShareState(null)}>
+          <div className="share-dialog" onClick={(e) => e.stopPropagation()}>
+            <div className="share-dialog-header">
+              <p className="share-dialog-title">Share "{shareState.title}"</p>
+              <button
+                className="share-dialog-close"
+                onClick={() => setShareState(null)}
+                aria-label="Close"
+              >
+                &times;
+              </button>
+            </div>
+
+            {shareState.status === "loading" && <p className="muted">Creating your share link…</p>}
+
+            {shareState.status === "ready" && (
+              <>
+                <p className="muted">Anyone with this link can add it to their own Links app.</p>
+                <div className="share-link-row">
+                  <input
+                    className="search-input"
+                    readOnly
+                    value={shareState.url}
+                    onFocus={(e) => e.target.select()}
+                  />
+                  <button className="btn btn-primary" onClick={handleCopyShareLink}>
+                    {shareCopied ? "Copied" : "Copy link"}
+                  </button>
+                </div>
+              </>
+            )}
+
+            {shareState.status === "error" && <p className="error-text">{shareState.error}</p>}
+          </div>
+        </div>
       )}
     </div>
   );
